@@ -367,6 +367,8 @@ void parseList()
 			if((n.type != TYPE_TEXT) && parts.size() >= 4)
 			{
 				n.path = parts[1];
+				if(n.path[0] != '/')
+					n.path.insert(0, "/");
 				n.host = parts[2];
 				n.port = strip(parts[3]);
 				font = fonts[FONT_LINK];

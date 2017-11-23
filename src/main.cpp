@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory.h>
 #include <sys/socket.h>
+#include <netinet/tcp.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -10,10 +11,15 @@
 #include <string>
 #include <vector>
 #include <cassert>
+#include <memory>
+#include <thread>
+#include <fstream>
+#include "net.h"
+#include "worker.h"
 
 const size_t npos = std::string::npos;
 const int SEARCHBOX_HEIGHT = 28;
-const char* HOME = "";
+const char* HOME = "gopher.quux.org";
 
 enum NodeType
 {
@@ -80,8 +86,12 @@ std::vector<Node> nodes;
 std::vector<History> history;
 uiArea* area = 0;
 double areaW = 0, areaH = 0;
-
 std::string location;
+
+const char* userHome()
+{
+	return getenv("HOME");
+}
 
 static int onClosing(uiWindow *w, void *data)
 {
@@ -235,66 +245,6 @@ void areaMouseEvent(uiAreaHandler*, uiArea*, uiAreaMouseEvent* e)
 
 uiEntry* address = 0;
 
-struct Result
-{
-	int result;
-	const char* error;
-};
-
-Result opensocket(const char* address, const char* port)
-{
-	addrinfo info;
-	memset(&info, 0, sizeof(info));
-	info.ai_family = AF_INET;
-	info.ai_socktype = SOCK_STREAM;
-	addrinfo* res;
-	int e_addr = getaddrinfo(address, port, &info, &res);
-	if(e_addr < 0)
-	{
-		return {-1, "Could not open address" };
-	}
-
-	int client = socket(AF_INET, SOCK_STREAM, 0);
-	if(client == -1)
-	{
-		return {-1, strerror(errno) };
-	}
-
-	if(!res)
-	{
-		close(client);
-		return {-1, strerror(errno) };
-	}
-
-	int flags = fcntl(client, F_GETFL);
-	fcntl(client, F_SETFL, flags | O_NONBLOCK);
-	connect(client, res->ai_addr, res->ai_addrlen);
-
-	fd_set wr;
-	float timeout = 10.0f * 1000000;
-	while(timeout > 0)
-	{
-		FD_ZERO(&wr);
-		FD_SET(client, &wr);
-
-		timeval t;
-		t.tv_sec = 0;
-		t.tv_usec = 1;
-		select(client+1, 0, &wr, 0, &t);
-		int i = 0;
-		if(FD_ISSET(client, &wr) || i)
-		{
-			flags = fcntl(client, F_GETFL);
-			fcntl(client, F_SETFL, flags & ~O_NONBLOCK);
-			return {client, ""};
-		}
-		usleep(10000);
-		timeout -= 10000;
-	}
-	close(client);
-	return {-1, "Timeout" };
-}
-
 void slice(std::string& str, size_t start, size_t end = std::string::npos)
 {
 	if(start > str.size())
@@ -346,7 +296,7 @@ void parseList()
 				n.type = TYPE_DIR;
 			else if(c == '0')
 				n.type = TYPE_FILE;
-			else if(c == '4' || c == '5' || c == '6' || c == '9' || c == 'g' || c == 'I')
+			else if(c == '4' || c == '5' || c == '6' || c == '9' || c == 'g' || c == 'I' || c == 's')
 				n.type = TYPE_BINARY;
 			else if(c == '7')
 				n.type = TYPE_SEARCH;
@@ -439,70 +389,87 @@ void go(const char* url, int type, const char* params)
 	if(addr.find(":") != std::string::npos)
 	{
 		port = addr.substr(addr.find(":")+1);
+		port = port.substr(0, port.rfind("/"));
 	}
 
-	location = url;
-	uiEntrySetText(address, location.c_str());
-	auto r = opensocket(host.c_str(), port.c_str());
-	if(r.result == -1)
+	if(type == TYPE_BINARY)
 	{
-		std::cerr << r.error << "\n";
-		showText(r.error);
-		return;
+		std::string path = url;
+		path.erase(0, path.find("/")+1);
+		path.erase(0, path.rfind("/")+1);
+		path = std::string(userHome())+"/Downloads/"+path;
+		download(url, path);
+		showText(std::string("Downloading ") + url + " to " + path);
 	}
-	int s = r.result;
-	std::string data;
-	int e = send(s, req.c_str(), req.size(), 0);
-	if(e == -1)
+	else
 	{
-		std::cerr << strerror(errno) << "\n";
-		showText(strerror(errno));
-		return;
-	}
-	char buffer[4096];
-	while(true)
-	{
-		int bytes = recv(s, buffer, 4096, 0);
-		if(bytes == -1)
+		location = url;
+		uiEntrySetText(address, location.c_str());
+		auto r = opensocket(host.c_str(), port.c_str());
+		if(r.result == -1)
 		{
-			std::cout << strerror(errno) << "\n";
-			showText(strerror(errno));
-			close(s);
+			std::cerr << r.error << "\n";
+			showText(r.error);
 			return;
 		}
-		else if(bytes)
-			data.append(buffer, buffer+bytes);
-		else
-			break;
-	}
+		int s = r.result;
+		std::string data;
 
-	lines.clear();
-	if(type == TYPE_DIR)
-	{
-		while(data.size())
+		int opt = 1;
+		setsockopt(s, SOL_TCP, TCP_NODELAY, &opt, sizeof(opt));
+
+		int e = send(s, req.c_str(), req.size(), 0);
+		if(e == -1)
 		{
-			size_t l = data.find("\n");
-			if(l != std::string::npos)
-			{
-				lines.push_back(data.substr(0, l));
-				data.erase(0, l+1);
-			}
-			else
-			{
-				lines.push_back(data);
-				break;
-			}
+			std::cerr << strerror(errno) << "\n";
+			showText(strerror(errno));
+			return;
 		}
-		parseList();
-	}
-	else if(type == TYPE_FILE)
-	{
-		showText(data);
-	}
+		char buffer[4096];
+		while(true)
+		{
+			int bytes = recv(s, buffer, 4096, 0);
+			if(bytes == -1)
+			{
+				std::cout << strerror(errno) << "\n";
+				showText(strerror(errno));
+				close(s);
+				return;
+			}
+			else if(bytes)
+				data.append(buffer, buffer+bytes);
+			else
+				break;
+		}
 
-	if(area)
-		uiAreaQueueRedrawAll(area);
-	close(s);
+		lines.clear();
+		if(type == TYPE_DIR)
+		{
+			while(data.size())
+			{
+				size_t l = data.find("\n");
+				if(l != std::string::npos)
+				{
+					lines.push_back(data.substr(0, l));
+					data.erase(0, l+1);
+				}
+				else
+				{
+					lines.push_back(data);
+					break;
+				}
+			}
+			parseList();
+		}
+		else if(type == TYPE_FILE)
+		{
+			showText(data);
+		}
+
+		if(area)
+			uiAreaQueueRedrawAll(area);
+		close(s);
+	}
 }
 
 void goClick(uiButton* b, void* data)
@@ -576,7 +543,15 @@ int main(void)
 	area = uiNewScrollingArea(&handler, areaW, areaH);
 	uiBoxAppend(box, uiControl(area), 1);
 
+	std::thread worker(runWorker);
+	if(std::string(HOME) != "")
+	{
+		history.push_back({HOME, TYPE_DIR});
+		go(HOME);
+	}
 	uiMain();
+	endWorker();
+	worker.join();
 	return 0;
 }
 

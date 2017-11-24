@@ -32,7 +32,9 @@ std::vector<Downloader*> downloaders;
 void Downloader::startDownload()
 {
 	tmp_path = local_path+".part";
-	std::cout << "downloading " << remotePath << " to " << local_path << "\n";
+	std::cout << "Downloading " << remotePath << " to " << local_path << "\n";
+	std::string remote = remotePath;
+	if(remote.find("gopher://")==0) remote = remote.substr(9);
 	file.reset(new std::ofstream(tmp_path.c_str(), std::ios::binary));
 	if(!file->good())
 	{
@@ -40,16 +42,16 @@ void Downloader::startDownload()
 		error = "could not open file for writing";
 		return;
 	}
-	std::string host = remotePath.substr(0, remotePath.find("/"));
+	std::string host = remote.substr(0, remote.find("/"));
 	host = host.substr(0, host.find(":"));
 	std::string port = "70";
-	if(remotePath.find(":") != std::string::npos)
+	if(remote.find(":") != std::string::npos)
 	{
-		port = remotePath.substr(remotePath.find(":")+1);
+		port = remote.substr(remote.find(":")+1);
 		port = port.substr(0, port.find("/"));
 	}
-	std::string file = remotePath.substr(remotePath.find("/"));
-	std::cout << host << " " << port << "\n";
+	std::string file = remote.substr(remote.find("/")+1);
+	file = file.substr(file.find("/"));
 	Result r = opensocket(host.c_str(), port.c_str());
 	if(r.result == -1)
 	{
@@ -58,7 +60,6 @@ void Downloader::startDownload()
 		return;
 	}
 	socket = r.result;
-	std::cout << "send\n";
 	int e = send(socket, (file+"\r\n").c_str(), file.size()+2, 0);
 	if(e == -1)
 	{
@@ -113,7 +114,7 @@ void pollDownloaders()
 		d->update();
 		if(d->state == Downloader::FINISHED)
 		{
-			std::cout << "download finished: " << d->local_path << "\n";
+			std::cout << "Download finished: " << d->local_path << "\n";
 			if(rename(d->tmp_path.c_str(), d->local_path.c_str()))
 				std::cout << "Failed to rename " << d->tmp_path << " to " << d->local_path << "\n";
 			i = downloaders.erase(i);

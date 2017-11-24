@@ -19,7 +19,8 @@
 
 const size_t npos = std::string::npos;
 const int SEARCHBOX_HEIGHT = 28;
-const char* HOME = "gopher.quux.org";
+const char* HOME = "gopher://gopher.quux.org";
+int ICON_SIZE = 24;
 
 enum NodeType
 {
@@ -42,10 +43,12 @@ enum Mode
 struct Node
 {
 	int type = TYPE_UNKNOWN;
+	char code;
 	std::string text;
 	std::string path;
 	std::string host;
 	std::string port;
+	std::string url;
 	double x = 0, y = 0, w = 0, h = 0;
 };
 
@@ -74,7 +77,6 @@ enum Font
 struct History
 {
 	std::string url;
-	int type;
 };
 
 uiDrawTextFont* fonts[FONT_MAX];
@@ -185,23 +187,26 @@ void fillArea(uiAreaDrawParams* p, int colour)
 	uiDrawFreePath(path);
 }
 
+void drawNode(const Node& n, uiDrawContext* context)
+{
+	auto font = fonts[FONT_TEXT];
+	int colour = colours.text;
+	if(n.type != TYPE_TEXT)
+	{
+		font = fonts[FONT_LINK];
+		colour = colours.link;
+	}
+	drawText(context, n.x, n.y, n.text.c_str(), font, colour);
+	if(n.type == TYPE_SEARCH)
+	{
+	}
+}
+
 void areaDraw(uiAreaHandler*, uiArea*, uiAreaDrawParams* p)
 {
 	fillArea(p, 0xffffff);
 	for(const Node& n : nodes)
-	{
-		auto font = fonts[FONT_TEXT];
-		int colour = colours.text;
-		if(n.type != TYPE_TEXT)
-		{
-			font = fonts[FONT_LINK];
-			colour = colours.link;
-		}
-		drawText(p->Context, n.x, n.y, n.text.c_str(), font, colour);
-		if(n.type == TYPE_SEARCH)
-		{
-		}
-	}
+		drawNode(n, p->Context);
 }
 
 void areaDragBroken(uiAreaHandler*, uiArea*)
@@ -219,7 +224,7 @@ void areaMouseCrossed(uiAreaHandler*, uiArea*, int)
 
 }
 
-void go(const char* url, int type = TYPE_DIR, const char* params = 0);
+void go(const char* url, const char* params = 0);
 void areaMouseEvent(uiAreaHandler*, uiArea*, uiAreaMouseEvent* e)
 {
 	if(e->Down)
@@ -230,13 +235,8 @@ void areaMouseEvent(uiAreaHandler*, uiArea*, uiAreaMouseEvent* e)
 			{
 				if(n.type == TYPE_TEXT)
 					return;
-				std::string url;
-				if(n.port != "70")
-					url = (n.host + ":" + n.port + n.path);
-				else
-					url = (n.host + n.path);
-				history.push_back({url, n.type});
-				go(url.c_str(), n.type);
+				history.push_back({n.url});
+				go(n.url.c_str());
 				return;
 			}
 		}
@@ -276,6 +276,31 @@ std::string strip(std::string& s)
 	return s;
 }
 
+int docType(int code)
+{
+	switch(code)
+	{
+	case 'i':
+		return TYPE_TEXT;
+	case '1':
+		return TYPE_DIR;
+	case '0':
+		return TYPE_FILE;
+	case '4':
+	case '5':
+	case '6':
+	case '9':
+	case 'g':
+	case 'I':
+	case's':
+		return TYPE_BINARY;
+	case '7':
+		return TYPE_SEARCH;
+	default:
+		return TYPE_UNKNOWN;
+	}
+}
+
 void parseList()
 {
 	int margin = 10;
@@ -290,18 +315,8 @@ void parseList()
 			Node n;
 			n.type = TYPE_TEXT;
 			char c = line[0];
-			if(c == 'i')
-				n.type = TYPE_TEXT;
-			else if(c == '1')
-				n.type = TYPE_DIR;
-			else if(c == '0')
-				n.type = TYPE_FILE;
-			else if(c == '4' || c == '5' || c == '6' || c == '9' || c == 'g' || c == 'I' || c == 's')
-				n.type = TYPE_BINARY;
-			else if(c == '7')
-				n.type = TYPE_SEARCH;
-			else
-				n.type = TYPE_UNKNOWN;
+			n.code = c;
+			n.type = docType(c);
 			std::vector<std::string> parts;
 			line.erase(0, 1);
 			while(line.size())
@@ -321,6 +336,10 @@ void parseList()
 					n.path.insert(0, "/");
 				n.host = parts[2];
 				n.port = strip(parts[3]);
+				if(n.port != "70")
+					n.url = "gopher://"+(n.host + ":" + n.port + "/" + n.code + n.path);
+				else
+					n.url = "gopher://"+(n.host + "/" + n.code + n.path);
 				font = fonts[FONT_LINK];
 			}
 			auto layout = uiDrawNewTextLayout(parts[0].c_str(), font, windowW());
@@ -328,6 +347,8 @@ void parseList()
 			uiDrawFreeTextLayout(layout);
 			n.text = parts[0];
 			n.x = margin;
+			if(n.type != TYPE_TEXT)
+				n.x += ICON_SIZE;
 			n.y = py;
 			nodes.push_back(n);
 			py += n.h + linespace;
@@ -369,20 +390,69 @@ void showText(const std::string& data)
 	uiAreaSetSize(area, areaW || 900, areaH);
 }
 
-void go(const char* url, int type, const char* params)
+bool syncDownload(const std::string& host, const std::string& port, const std::string& req, std::string& data)
+{
+	auto r = opensocket(host.c_str(), port.c_str());
+	if(r.result == -1)
+	{
+		std::cerr << r.error << "\n";
+		showText(r.error);
+		return false;
+	}
+	int s = r.result;
+
+	int opt = 1;
+	setsockopt(s, SOL_TCP, TCP_NODELAY, &opt, sizeof(opt));
+
+	int e = send(s, req.c_str(), req.size(), 0);
+	if(e == -1)
+	{
+		std::cerr << strerror(errno) << "\n";
+		showText(strerror(errno));
+		return false;
+	}
+	char buffer[4096];
+	while(true)
+	{
+		int bytes = recv(s, buffer, 4096, 0);
+		if(bytes == -1)
+		{
+			std::cout << strerror(errno) << "\n";
+			showText(strerror(errno));
+			close(s);
+			return false;
+		}
+		else if(bytes)
+			data.append(buffer, buffer+bytes);
+		else
+			break;
+	}
+	close(s);
+	return true;
+}
+
+void go(const char* url, const char* params)
 {
 	nodes.clear();
 	std::string addr = url;
-	std::string host = url;
+	if(addr.find("gopher://")==0)
+	{
+		addr = addr.substr(9);
+	}
+	std::string host = addr;
 	host = host.substr(0, host.find('/'));
 	host = host.substr(0, host.rfind(':'));
 
-	std::string req = url;
+	std::string req = addr;
+	char code = '1';
 	auto sl = req.find('/');
 	if(sl == npos)
 		req = "";
-	else
-		req = req.substr(sl+1);
+	else if(req.size() > sl+3)
+	{
+		code = req[sl+1];
+		req = req.substr(sl+3);
+	}
 	req += "\r\n";
 
 	std::string port = "70";
@@ -391,91 +461,57 @@ void go(const char* url, int type, const char* params)
 		port = addr.substr(addr.find(":")+1);
 		port = port.substr(0, port.rfind("/"));
 	}
-
+	int type = docType(code);
 	if(type == TYPE_BINARY)
 	{
-		std::string path = url;
+		std::string path = req;
 		path.erase(0, path.find("/")+1);
 		path.erase(0, path.rfind("/")+1);
 		path = std::string(userHome())+"/Downloads/"+path;
-		download(url, path);
+		download(url, strip(path));
 		showText(std::string("Downloading ") + url + " to " + path);
 	}
 	else
 	{
 		location = url;
 		uiEntrySetText(address, location.c_str());
-		auto r = opensocket(host.c_str(), port.c_str());
-		if(r.result == -1)
-		{
-			std::cerr << r.error << "\n";
-			showText(r.error);
-			return;
-		}
-		int s = r.result;
 		std::string data;
-
-		int opt = 1;
-		setsockopt(s, SOL_TCP, TCP_NODELAY, &opt, sizeof(opt));
-
-		int e = send(s, req.c_str(), req.size(), 0);
-		if(e == -1)
+		if(syncDownload(host, port, req, data))
 		{
-			std::cerr << strerror(errno) << "\n";
-			showText(strerror(errno));
-			return;
-		}
-		char buffer[4096];
-		while(true)
-		{
-			int bytes = recv(s, buffer, 4096, 0);
-			if(bytes == -1)
+			lines.clear();
+			if(type == TYPE_DIR)
 			{
-				std::cout << strerror(errno) << "\n";
-				showText(strerror(errno));
-				close(s);
-				return;
+				while(data.size())
+				{
+					size_t l = data.find("\n");
+					if(l != std::string::npos)
+					{
+						lines.push_back(data.substr(0, l));
+						data.erase(0, l+1);
+					}
+					else
+					{
+						lines.push_back(data);
+						break;
+					}
+				}
+				parseList();
 			}
-			else if(bytes)
-				data.append(buffer, buffer+bytes);
-			else
-				break;
-		}
-
-		lines.clear();
-		if(type == TYPE_DIR)
-		{
-			while(data.size())
+			else if(type == TYPE_FILE)
 			{
-				size_t l = data.find("\n");
-				if(l != std::string::npos)
-				{
-					lines.push_back(data.substr(0, l));
-					data.erase(0, l+1);
-				}
-				else
-				{
-					lines.push_back(data);
-					break;
-				}
+				showText(data);
 			}
-			parseList();
-		}
-		else if(type == TYPE_FILE)
-		{
-			showText(data);
 		}
 
 		if(area)
 			uiAreaQueueRedrawAll(area);
-		close(s);
 	}
 }
 
 void goClick(uiButton* b, void* data)
 {
 	char* addr = uiEntryText(address);
-	history.push_back({addr, TYPE_DIR});
+	history.push_back({addr});
 	go(addr);
 }
 
@@ -484,14 +520,28 @@ void backClick(uiButton* b, void* data)
 	if(history.size() > 1)
 	{
 		history.pop_back();
-		go(history.back().url.c_str(), history.back().type);
+		go(history.back().url.c_str());
 	}
+}
+
+void upClick(uiButton* b, void* data)
+{
+	std::string addr = location;
+	size_t sl = addr.rfind("/");
+	if(sl == npos)
+		return;
+	addr = addr.substr(0, sl);
+	history.push_back({addr});
+	go(addr.c_str());
 }
 
 void addressBarEnter(uiEntry* e, void* data)
 {
-	history.push_back({uiEntryText(e), TYPE_DIR});
-	go(uiEntryText(e));
+	std::string addr = uiEntryText(e);
+	if(addr.find("gopher://") != 0)
+		addr = "gopher://" + addr;
+	history.push_back({addr});
+	go(addr.c_str());
 }
 
 int main(void)
@@ -530,6 +580,10 @@ int main(void)
 	uiButtonOnClicked(back, backClick, 0);
 	uiBoxAppend(addressBar, uiControl(back), 0);
 
+	uiButton* up = uiNewButton("Up");
+	uiButtonOnClicked(up, upClick, 0);
+	uiBoxAppend(addressBar, uiControl(up), 0);
+
 	uiAreaHandler handler;
 	handler.Draw = areaDraw;
 	handler.DragBroken = areaDragBroken;
@@ -546,7 +600,7 @@ int main(void)
 	std::thread worker(runWorker);
 	if(std::string(HOME) != "")
 	{
-		history.push_back({HOME, TYPE_DIR});
+		history.push_back({HOME});
 		go(HOME);
 	}
 	uiMain();

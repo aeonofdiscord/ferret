@@ -153,13 +153,10 @@ void drawText(uiDrawContext* context, int x, int y, const char* text, uiDrawText
 	if(colour == -1)
 		colour = colours.text;
 
-	std::string t = text;
-	if(t[t.size()-1] == '\n')
-		t.erase(t.size()-1);
-
 	Colour c = rgb(colour);
-	uiDrawTextLayout* layout = uiDrawNewTextLayout(t.c_str(), font, windowW());
-	uiDrawTextLayoutSetColor(layout, 0, t.size(), c.r, c.g, c.b, 1.0);
+	size_t len = strlen(text);
+	uiDrawTextLayout* layout = uiDrawNewTextLayout(text, font, windowW());
+	uiDrawTextLayoutSetColor(layout, 0, len, c.r, c.g, c.b, 1.0);
 	uiDrawText(context, x, y, layout);
 	uiDrawFreeTextLayout(layout);
 }
@@ -195,8 +192,10 @@ void drawNode(const Node& n, uiDrawContext* context)
 	{
 		font = fonts[FONT_LINK];
 		colour = colours.link;
+		drawText(context, n.x, n.y, n.text.c_str(), font, colour);
 	}
-	drawText(context, n.x, n.y, n.text.c_str(), font, colour);
+	else
+		drawText(context, n.x, n.y, n.text.c_str(), font, colour);
 	if(n.type == TYPE_SEARCH)
 	{
 	}
@@ -342,13 +341,17 @@ void parseList()
 					n.url = "gopher://"+(n.host + "/" + n.code + n.path);
 				font = fonts[FONT_LINK];
 			}
-			auto layout = uiDrawNewTextLayout(parts[0].c_str(), font, windowW());
+			n.text = parts[0];
+			if(n.code != 'i')
+				n.text = std::string(&n.code, 1) + " " + n.text;
+			auto layout = uiDrawNewTextLayout(n.text.c_str(), font, windowW());
 			uiDrawTextLayoutExtents(layout, &n.w, &n.h);
 			uiDrawFreeTextLayout(layout);
-			n.text = parts[0];
 			n.x = margin;
 			if(n.type != TYPE_TEXT)
-				n.x += ICON_SIZE;
+			{
+				//n.x += ICON_SIZE;
+			}
 			n.y = py;
 			nodes.push_back(n);
 			py += n.h + linespace;
@@ -373,20 +376,36 @@ std::string filetype(const std::string& path)
 void showText(const std::string& data)
 {
 	nodes.clear();
-	Node n;
-	n.x = 10;
-	n.y = 10;
-	n.type = TYPE_TEXT;
-	n.text = data;
-	replaceAll(n.text, "\r", "");
-	rstrip(n.text);
-	if(n.text.size() && n.text[n.text.size()-1] == '.')
-		n.text.erase(n.text.size()-1);
-	nodes.push_back(n);
-	auto layout = uiDrawNewTextLayout(data.c_str(), fonts[FONT_TEXT], windowW());
-	uiDrawTextLayoutExtents(layout, &n.w, &n.h);
-	uiDrawFreeTextLayout(layout);
-	areaH = n.h;
+
+	std::vector<std::string> lines;
+	lines.push_back("");
+	for(size_t i = 0; i < data.size(); ++i)
+	{
+		if(data[i] == '\n')
+			lines.push_back("");
+		else if(data[i] == '.' && i == data.size()-1)
+			break;
+		else if(data[i] != '\r')
+			lines.back() += data[i];
+
+	}
+	int py = 10;
+	for(auto& l : lines)
+	{
+		Node n;
+		n.x = 10;
+		n.y = py;
+		n.type = TYPE_TEXT;
+		n.text = l;
+		uiDrawTextLayout* layout = uiDrawNewTextLayout(l.c_str(), fonts[FONT_TEXT], windowW());
+		double w, h;
+		uiDrawTextLayoutExtents(layout, &w, &h);
+		py += h;
+		uiDrawFreeTextLayout(layout);
+		nodes.push_back(n);
+	}
+
+	areaH = py;
 	uiAreaSetSize(area, areaW || 900, areaH);
 }
 
@@ -448,10 +467,10 @@ void go(const char* url, const char* params)
 	auto sl = req.find('/');
 	if(sl == npos)
 		req = "";
-	else if(req.size() > sl+3)
+	else if(req.size() > sl+1)
 	{
 		code = req[sl+1];
-		req = req.substr(sl+3);
+		req.erase(0, sl+3);
 	}
 	req += "\r\n";
 
@@ -524,15 +543,48 @@ void backClick(uiButton* b, void* data)
 	}
 }
 
+template <class T> void fmt(const std::string& f, const T& values)
+{
+	std::string result = "";
+	bool escape = false;
+	for(size_t i = 0; i < f.size(); ++i)
+	{
+		if(f[i] == '\\')
+		{
+			escape = true;
+			continue;
+		}
+		if(escape)
+		{
+			result += f[i];
+		}
+		else if(f[i] == '$')
+		{
+
+		}
+		escape = false;
+	}
+}
+
 void upClick(uiButton* b, void* data)
 {
 	std::string addr = location;
-	size_t sl = addr.rfind("/");
-	if(sl == npos)
+	if(addr.find("gopher://") == 0)
+		addr.erase(0, 9);
+	size_t sl = addr.find("/");
+	std::string host = addr.substr(0, sl);
+	if(sl == npos || sl == addr.size()-1)
+	{
 		return;
-	addr = addr.substr(0, sl);
-	history.push_back({addr});
-	go(addr.c_str());
+	}
+	std::string target = "gopher://"+host;
+	std::string path = addr.substr(sl+2);
+	path.erase(path.rfind("/"));
+	if(path != "")
+	{
+		target += "/1" + path;
+	}
+	go(target.c_str());
 }
 
 void addressBarEnter(uiEntry* e, void* data)
@@ -568,6 +620,18 @@ int main(void)
 	uiBox* addressBar = uiNewHorizontalBox();
 	uiBoxAppend(box, uiControl(addressBar), 0);
 
+	uiButton* back = uiNewButton("Back");
+	uiButtonOnClicked(back, backClick, 0);
+	uiBoxAppend(addressBar, uiControl(back), 0);
+
+	//uiButton* forward = uiNewButton("Forward");
+	//uiButtonOnClicked(forward, forwardClick, 0);
+	//uiBoxAppend(addressBar, uiControl(forward), 0);
+
+	uiButton* up = uiNewButton("Up");
+	uiButtonOnClicked(up, upClick, 0);
+	uiBoxAppend(addressBar, uiControl(up), 0);
+
 	address = uiNewEntry();
 	uiEntryOnEnter(address, addressBarEnter, 0);
 	uiBoxAppend(addressBar, uiControl(address), 1);
@@ -575,14 +639,6 @@ int main(void)
 	uiButton* goButton = uiNewButton("Go");
 	uiButtonOnClicked(goButton, goClick, 0);
 	uiBoxAppend(addressBar, uiControl(goButton), 0);
-
-	uiButton* back = uiNewButton("Back");
-	uiButtonOnClicked(back, backClick, 0);
-	uiBoxAppend(addressBar, uiControl(back), 0);
-
-	uiButton* up = uiNewButton("Up");
-	uiButtonOnClicked(up, upClick, 0);
-	uiBoxAppend(addressBar, uiControl(up), 0);
 
 	uiAreaHandler handler;
 	handler.Draw = areaDraw;

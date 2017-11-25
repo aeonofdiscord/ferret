@@ -546,29 +546,6 @@ void backClick(uiButton* b, void* data)
 	}
 }
 
-template <class T> void fmt(const std::string& f, const T& values)
-{
-	std::string result = "";
-	bool escape = false;
-	for(size_t i = 0; i < f.size(); ++i)
-	{
-		if(f[i] == '\\')
-		{
-			escape = true;
-			continue;
-		}
-		if(escape)
-		{
-			result += f[i];
-		}
-		else if(f[i] == '$')
-		{
-
-		}
-		escape = false;
-	}
-}
-
 void upClick(uiButton* b, void* data)
 {
 	std::string addr = location;

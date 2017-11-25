@@ -518,6 +518,9 @@ void go(const char* url, const char* params)
 			}
 			else if(type == TYPE_FILE)
 			{
+				strip(data);
+				if(data.size() > 0 && data[data.size()-1] == '.')
+					data.erase(data.size()-1);
 				showText(data);
 			}
 		}

@@ -1,5 +1,6 @@
 #!/bin/sh
-mkdir build
+lsb_release -ir
+mkdir -p build
 cd build
 cmake ..
 make

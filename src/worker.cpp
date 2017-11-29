@@ -100,9 +100,12 @@ void pollDownloaders()
 	int max = 0;
 	for(auto& d : downloaders)
 	{
-		FD_SET(d->socket, &set);
-		if(max < d->socket)
-			max = d->socket;
+		if(d->socket != -1)
+		{
+			FD_SET(d->socket, &set);
+			if(max < d->socket)
+				max = d->socket;
+		}
 	}
 	timeval tv;
 	tv.tv_sec = 0;
@@ -149,6 +152,7 @@ void download(const std::string& remote_path, const std::string& local_path)
 {
 	std::unique_lock<std::mutex> lock(mtx);
 	Downloader* d = new Downloader;
+	d->socket = -1;
 	d->remotePath = remote_path;
 	d->local_path = local_path;
 	d->state = Downloader::START;

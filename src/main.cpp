@@ -1,26 +1,16 @@
-#include <libui/ui.h>
 #include <iostream>
 #include <memory.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <cstdlib>
-#include <cstdio>
 #include <string>
 #include <vector>
-#include <cassert>
 #include <memory>
 #include <thread>
 #include <fstream>
 #include "net.h"
+#include "str.h"
 #include "worker.h"
-
-const size_t npos = std::string::npos;
-const int SEARCHBOX_HEIGHT = 28;
-const char* HOME = "gopher://gopher.quux.org";
-int ICON_SIZE = 24;
+#include "ui.h"
 
 enum NodeType
 {
@@ -49,29 +39,7 @@ struct Node
 	std::string host;
 	std::string port;
 	std::string url;
-	double x = 0, y = 0, w = 0, h = 0;
-};
-
-struct
-{
-	int text = 0;
-	int link = 0x0000ff;
-} colours;
-
-static uiWindow *window;
-
-enum Style
-{
-	STYLE_NORMAL = 0,
-	STYLE_ITALIC = 1,
-	STYLE_BOLD   = 2,
-};
-
-enum Font
-{
-	FONT_TEXT,
-	FONT_LINK,
-	FONT_MAX,
+	int start, end;
 };
 
 struct History
@@ -79,200 +47,31 @@ struct History
 	std::string url;
 };
 
-uiDrawTextFont* fonts[FONT_MAX];
+struct Link
+{
+	int start, end;
+	std::string url;
+};
 
-struct Colour { double r, g, b, a; };
+const size_t npos = std::string::npos;
+const int SEARCHBOX_HEIGHT = 28;
+const char* HOME = "gopher://gopher.quux.org";
+int ICON_SIZE = 24;
 
 std::vector<std::string> lines;
 std::vector<Node> nodes;
 std::vector<History> history;
-uiArea* area = 0;
-double areaW = 0, areaH = 0;
+std::vector<Link> links;
 std::string location;
+
+std::unique_ptr<Application> app;
+std::unique_ptr<Window> w;
+TextView* view = 0;
+Edit* address = 0;
 
 const char* userHome()
 {
 	return getenv("HOME");
-}
-
-static int onClosing(uiWindow *w, void *data)
-{
-	uiQuit();
-	return 1;
-}
-
-static int onShouldQuit(void *data)
-{
-	uiWindow *mainwin = uiWindow(data);
-
-	uiControlDestroy(uiControl(mainwin));
-	return 1;
-}
-
-Colour rgb(int c)
-{
-	Colour colour;
-	colour.r = (c >> 16) / 255.0;
-	colour.g = ((c >> 8) & 0xff) / 255.0;
-	colour.b = (c & 0xff) / 255.0;
-	colour.a = 1.0;
-	return colour;
-}
-
-uiDrawTextFont* loadFont(const char* name, double size, int style = 0)
-{
-	uiDrawTextFontDescriptor desc;
-	desc.Family = name;
-	desc.Italic = style & STYLE_ITALIC ? uiDrawTextItalicItalic : uiDrawTextItalicNormal;
-	desc.Stretch = uiDrawTextStretchNormal;
-	desc.Weight = style & STYLE_BOLD ? uiDrawTextWeightBold : uiDrawTextWeightNormal;
-	desc.Size = size;
-	return uiDrawLoadClosestFont(&desc);
-}
-
-int windowW()
-{
-	int w, h;
-	uiWindowContentSize(window, &w, &h);
-	return w;
-}
-
-std::string replaceAll(std::string& str, const std::string& f, const std::string& r)
-{
-	auto i = str.find(f);
-	while(str.find(f) != npos)
-	{
-		str.replace(i, f.size(), r);
-		i = str.find(f);
-	}
-	return str;
-}
-
-void drawText(uiDrawContext* context, int x, int y, const char* text, uiDrawTextFont* font, int colour = -1)
-{
-	if(colour == -1)
-		colour = colours.text;
-
-	Colour c = rgb(colour);
-	size_t len = strlen(text);
-	uiDrawTextLayout* layout = uiDrawNewTextLayout(text, font, windowW());
-	uiDrawTextLayoutSetColor(layout, 0, len, c.r, c.g, c.b, 1.0);
-	uiDrawText(context, x, y, layout);
-	uiDrawFreeTextLayout(layout);
-}
-
-void textExtents(const char* text, uiDrawTextFont* font, double* w, double* h)
-{
-	uiDrawTextLayout* layout = uiDrawNewTextLayout(text, font, windowW());
-	uiDrawTextLayoutExtents(layout, w, h);
-	uiDrawFreeTextLayout(layout);
-}
-
-void fillArea(uiAreaDrawParams* p, int colour)
-{
-	uiDrawBrush brush;
-	brush.Type = uiDrawBrushTypeSolid;
-	brush.R = (colour >> 16) / 255.0;
-	brush.G = ((colour >> 8) & 0xff) / 255.0;
-	brush.B = (colour & 0xff) / 255.0;
-	brush.A = 1.0f;
-	uiDrawPath* path = uiDrawNewPath(uiDrawFillModeWinding);
-	double h = std::max(p->ClipHeight, areaH);
-	uiDrawPathAddRectangle(path, 0, 0, p->ClipWidth, h);
-	uiDrawPathEnd(path);
-	uiDrawFill(p->Context, path, &brush);
-	uiDrawFreePath(path);
-}
-
-void drawNode(const Node& n, uiDrawContext* context)
-{
-	auto font = fonts[FONT_TEXT];
-	int colour = colours.text;
-	if(n.type != TYPE_TEXT)
-	{
-		font = fonts[FONT_LINK];
-		colour = colours.link;
-		drawText(context, n.x, n.y, n.text.c_str(), font, colour);
-	}
-	else
-		drawText(context, n.x, n.y, n.text.c_str(), font, colour);
-	if(n.type == TYPE_SEARCH)
-	{
-	}
-}
-
-void areaDraw(uiAreaHandler*, uiArea*, uiAreaDrawParams* p)
-{
-	fillArea(p, 0xffffff);
-	for(const Node& n : nodes)
-		drawNode(n, p->Context);
-}
-
-void areaDragBroken(uiAreaHandler*, uiArea*)
-{
-
-}
-
-int areaKeyEvent(uiAreaHandler*, uiArea*, uiAreaKeyEvent*)
-{
-	return 0;
-}
-
-void areaMouseCrossed(uiAreaHandler*, uiArea*, int)
-{
-
-}
-
-void go(const char* url, const char* params = 0);
-void areaMouseEvent(uiAreaHandler*, uiArea*, uiAreaMouseEvent* e)
-{
-	if(e->Down)
-	{
-		for(Node& n : nodes)
-		{
-			if(n.x <= e->X && n.y <= e->Y && n.x + n.w > e->X && n.y+n.h > e->Y)
-			{
-				if(n.type == TYPE_TEXT)
-					return;
-				history.push_back({n.url});
-				go(n.url.c_str());
-				return;
-			}
-		}
-	}
-}
-
-uiEntry* address = 0;
-
-void slice(std::string& str, size_t start, size_t end = std::string::npos)
-{
-	if(start > str.size())
-		start = 0;
-	str.erase(0, start);
-	if(end > str.size())
-		end = str.size();
-	str.erase(end, str.size());
-}
-
-std::string rstrip(std::string& s)
-{
-	while(s.size() > 0 && isspace(s[s.size()-1]))
-		s.erase(s.size()-1);
-	return s;
-}
-
-std::string lstrip(std::string& s)
-{
-	while(s.size() > 0 && isspace(s[0]))
-		s.erase(0, 1);
-	return s;
-}
-
-std::string strip(std::string& s)
-{
-	lstrip(s);
-	rstrip(s);
-	return s;
 }
 
 int docType(int code)
@@ -291,7 +90,7 @@ int docType(int code)
 	case '9':
 	case 'g':
 	case 'I':
-	case's':
+	case 's':
 		return TYPE_BINARY;
 	case '7':
 		return TYPE_SEARCH;
@@ -302,10 +101,6 @@ int docType(int code)
 
 void parseList()
 {
-	int margin = 10;
-	int linespace = 0;
-	int py = margin;
-
 	nodes.clear();
 	for(std::string& line : lines)
 	{
@@ -327,7 +122,6 @@ void parseList()
 				else
 					line.erase(0, i+1);
 			}
-			auto font = fonts[FONT_TEXT];
 			if((n.type != TYPE_TEXT) && parts.size() >= 4)
 			{
 				n.path = parts[1];
@@ -339,30 +133,13 @@ void parseList()
 					n.url = "gopher://"+(n.host + ":" + n.port + "/" + n.code + n.path);
 				else
 					n.url = "gopher://"+(n.host + "/" + n.code + n.path);
-				font = fonts[FONT_LINK];
 			}
-			n.text = parts[0];
+			n.text = parts[0] + "\n";
 			if(n.code != 'i')
 				n.text = std::string(&n.code, 1) + " " + n.text;
-			auto layout = uiDrawNewTextLayout(n.text.c_str(), font, windowW());
-			uiDrawTextLayoutExtents(layout, &n.w, &n.h);
-			uiDrawFreeTextLayout(layout);
-			n.x = margin;
-			if(n.type != TYPE_TEXT)
-			{
-				//n.x += ICON_SIZE;
-			}
-			n.y = py;
 			nodes.push_back(n);
-			py += n.h + linespace;
-			if(n.type == TYPE_SEARCH)
-			{
-				py += SEARCHBOX_HEIGHT;
-			}
 		}
 	}
-	areaH = py;
-	uiAreaSetSize(area, areaW || 900, areaH);
 }
 
 std::string filetype(const std::string& path)
@@ -382,31 +159,22 @@ void showText(const std::string& data)
 	for(size_t i = 0; i < data.size(); ++i)
 	{
 		if(data[i] == '\n')
+		{
+			lines.back() += "\n";
 			lines.push_back("");
+		}
 		else if(data[i] == '.' && i == data.size()-1)
 			break;
 		else if(data[i] != '\r')
 			lines.back() += data[i];
-
 	}
-	int py = 10;
 	for(auto& l : lines)
 	{
 		Node n;
-		n.x = 10;
-		n.y = py;
 		n.type = TYPE_TEXT;
 		n.text = l;
-		uiDrawTextLayout* layout = uiDrawNewTextLayout(l.c_str(), fonts[FONT_TEXT], windowW());
-		double w, h;
-		uiDrawTextLayoutExtents(layout, &w, &h);
-		py += h;
-		uiDrawFreeTextLayout(layout);
 		nodes.push_back(n);
 	}
-
-	areaH = py;
-	uiAreaSetSize(area, areaW || 900, areaH);
 }
 
 bool syncDownload(const std::string& host, const std::string& port, const std::string& req, std::string& data)
@@ -450,8 +218,12 @@ bool syncDownload(const std::string& host, const std::string& port, const std::s
 	return true;
 }
 
-void go(const char* url, const char* params)
+void addNodes(TextView* view);
+void go(const char* url, bool addToHistory = true)
 {
+	if(addToHistory)
+		history.push_back({url});
+	address->setText(url);
 	nodes.clear();
 	std::string addr = url;
 	if(addr.find("gopher://")==0)
@@ -493,7 +265,7 @@ void go(const char* url, const char* params)
 	else
 	{
 		location = url;
-		uiEntrySetText(address, location.c_str());
+		address->setText(location);
 		std::string data;
 		if(syncDownload(host, port, req, data))
 		{
@@ -524,29 +296,27 @@ void go(const char* url, const char* params)
 				showText(data);
 			}
 		}
-
-		if(area)
-			uiAreaQueueRedrawAll(area);
 	}
+	addNodes(view);
 }
 
-void goClick(uiButton* b, void* data)
+void goClick()
 {
-	char* addr = uiEntryText(address);
-	history.push_back({addr});
-	go(addr);
+	const char* addr = address->text();
+	go(addr, true);
 }
 
-void backClick(uiButton* b, void* data)
+void backClick()
 {
-	if(history.size() > 1)
+	if(history.size() > 0)
 	{
+		std::string url = history.back().url;
 		history.pop_back();
-		go(history.back().url.c_str());
+		go(url.c_str(), false);
 	}
 }
 
-void upClick(uiButton* b, void* data)
+void upClick()
 {
 	std::string addr = location;
 	if(addr.find("gopher://") == 0)
@@ -567,81 +337,130 @@ void upClick(uiButton* b, void* data)
 	go(target.c_str());
 }
 
-void addressBarEnter(uiEntry* e, void* data)
+void addressBarEnter()
 {
-	std::string addr = uiEntryText(e);
+	std::string addr = address->text();
 	if(addr.find("gopher://") != 0)
 		addr = "gopher://" + addr;
-	history.push_back({addr});
 	go(addr.c_str());
 }
 
-int main(void)
+std::string read(const char* path)
 {
-	uiInitOptions options;
-	options.Size = 0;
-	const char* err = uiInit(&options);
-	if (err) {
-		std::cerr << "error initializing libui: " << err << "\n";
-		uiFreeInitError(err);
-		return 1;
+	std::string str;
+	std::ifstream file(path);
+	while(file.good())
+	{
+		char c = file.get();
+		if(!file.good())
+			break;
+		str += c;
 	}
+	return str;
+}
 
-	fonts[FONT_TEXT] = loadFont("Sans", 11, STYLE_NORMAL);
-	fonts[FONT_LINK] = loadFont("Sans", 11, STYLE_ITALIC);
+void tagEvent(GtkTextTag* tag, GObject* o, GdkEvent* event, GtkTextIter* iter, gpointer data)
+{
+	if(event->type == GDK_BUTTON_PRESS)
+	{
+		int offset = gtk_text_iter_get_offset(iter);
+		for(auto& l : links)
+		{
+			if(l.url == "")
+				continue;
+			if(offset >= l.start && offset < l.end)
+			{
+				go(l.url.c_str());
+				break;
+			}
+		}
+	}
+}
 
-	window = uiNewWindow("ferret", 1280, 1024, 0);
-	uiWindowOnClosing(window, onClosing, NULL);
-	uiOnShouldQuit(onShouldQuit, window);
+void addText(GtkTextBuffer* buffer, const std::string& text)
+{
+	GtkTextIter end;
+	gtk_text_buffer_get_iter_at_offset(view->buffer, &end, -1);
+	gtk_text_buffer_insert(view->buffer, &end, text.c_str(), text.size());
+}
 
-	uiBox* box = uiNewVerticalBox();
-	uiWindowSetChild(window, uiControl(box));
+void addLink(GtkTextBuffer* buffer, GtkTextTag* tag, const std::string& text, const std::string& url)
+{
+	GtkTextIter end;
+	gtk_text_buffer_get_iter_at_offset(view->buffer, &end, -1);
+	int start = gtk_text_iter_get_offset(&end);
+	gtk_text_buffer_insert_with_tags(view->buffer, &end, text.c_str(), text.size(), tag, nullptr);
+	links.push_back({start, start+int(text.size()), url});
+}
 
-	uiBox* addressBar = uiNewHorizontalBox();
-	uiBoxAppend(box, uiControl(addressBar), 0);
+void addNodes(TextView* view)
+{
+	view->clear();
+	auto tag = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(view->buffer), "link");
+	for(auto& n : nodes)
+	{
+		if(n.type == TYPE_TEXT)
+			addText(view->buffer, n.text);
+		else
+			addLink(view->buffer, tag, n.text, n.url);
+	}
+}
 
-	uiButton* back = uiNewButton("Back");
-	uiButtonOnClicked(back, backClick, 0);
-	uiBoxAppend(addressBar, uiControl(back), 0);
+void activate()
+{
+	auto provider = gtk_css_provider_new();
+	gtk_css_provider_load_from_data(provider, read("style.css").c_str(), -1, 0);
 
-	//uiButton* forward = uiNewButton("Forward");
-	//uiButtonOnClicked(forward, forwardClick, 0);
-	//uiBoxAppend(addressBar, uiControl(forward), 0);
+	w.reset(new Window(app.get()));
 
-	uiButton* up = uiNewButton("Up");
-	uiButtonOnClicked(up, upClick, 0);
-	uiBoxAppend(addressBar, uiControl(up), 0);
+	auto screen = gdk_screen_get_default();
+	gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
-	address = uiNewEntry();
-	uiEntryOnEnter(address, addressBarEnter, 0);
-	uiBoxAppend(addressBar, uiControl(address), 1);
+	w->setTitle("ferret");
+	w->setDefaultSize(1280, 1024);
+	Box* main = w->add(new Box(Box::VERTICAL));
+	Box* addressBar = main->insert(new Box(Box::HORIZONTAL));
+	Button* back = addressBar->insert(new Button("Back"), false, false);
+	back->onClick(backClick);
+	//Button* forward = addressBar->insert(new Button("Forward"), false, false);
+	Button* up = addressBar->insert(new Button("Up"), false, false);
+	up->onClick(upClick);
+	address = addressBar->insert(new Edit, true, true);
+	address->onActivate(addressBarEnter);
+	Button* goURL = addressBar->push(new Button("Go"), false, false);
+	goURL->onClick(goClick);
 
-	uiButton* goButton = uiNewButton("Go");
-	uiButtonOnClicked(goButton, goClick, 0);
-	uiBoxAppend(addressBar, uiControl(goButton), 0);
+	auto scroll = new ScrolledWindow();
+	main->push(scroll, true, true);
 
-	uiAreaHandler handler;
-	handler.Draw = areaDraw;
-	handler.DragBroken = areaDragBroken;
-	handler.KeyEvent = areaKeyEvent;
-	handler.MouseCrossed = areaMouseCrossed;
-	handler.MouseEvent = areaMouseEvent;
+	view = scroll->add(new TextView());
+	view->setMargin(10, 10, 10, 10);
 
-	uiControlShow(uiControl(window));
-	int w, h;
-	uiWindowContentSize(window, &w, &h);
-	area = uiNewScrollingArea(&handler, areaW, areaH);
-	uiBoxAppend(box, uiControl(area), 1);
+	addNodes(view);
 
-	std::thread worker(runWorker);
+	view->setEditable(false);
+	view->showCursor(false);
+	w->showAll();
+
+	GdkRGBA blue = {0, 0, 1, 1} ;
+	auto tag = gtk_text_buffer_create_tag(view->buffer, "link", "foreground-rgba", &blue, nullptr);
+	g_signal_connect(tag, "event", G_CALLBACK(tagEvent), 0);
+
 	if(std::string(HOME) != "")
 	{
-		history.push_back({HOME});
 		go(HOME);
 	}
-	uiMain();
+}
+
+int main(int argc, char** argv)
+{
+	app.reset(new Application("test.app", 0));
+	app->onActivate(activate);
+
+	std::thread worker(runWorker);
+	int status = app->run(argc, argv);
 	endWorker();
 	worker.join();
-	return 0;
+	return status;
 }
 

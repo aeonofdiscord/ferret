@@ -8,9 +8,16 @@
 
 class Application
 {
+private:
+	std::function<void()> _activate = [](){};
+
+	static void _static_activate(void* a, void* b)
+	{
+		reinterpret_cast<Application*>(b)->_activate();
+	}
+
 public:
 	GtkApplication* handle;
-	std::function<void()> act = [](){};
 
 	Application(const char* id, int flags)
 	{
@@ -21,14 +28,9 @@ public:
 		g_object_unref(handle);
 	}
 
-	static void _static_activate(void* a, void* b)
-	{
-		reinterpret_cast<Application*>(b)->act();
-	}
-
 	template<class F> void onActivate(const F& f)
 	{
-		act = f;
+		_activate = f;
 		g_signal_connect(handle, "activate", G_CALLBACK(_static_activate), this);
 	}
 
@@ -79,20 +81,21 @@ public:
 
 class Button : public Widget
 {
-public:
-	std::function<void()> click = [](){};
-
-	Button(const char* text) { handle = gtk_button_new_with_label(text); }
-	~Button() {}
+private:
+	std::function<void()> _click = [](){};
 
 	static void _static_click(GtkWidget* b, void* data)
 	{
-		reinterpret_cast<Button*>(data)->click();
+		reinterpret_cast<Button*>(data)->_click();
 	}
+
+public:
+	Button(const char* text) { handle = gtk_button_new_with_label(text); }
+	~Button() {}
 
 	void onClick(std::function<void()> f)
 	{
-		click = f;
+		_click = f;
 		g_signal_connect(handle, "clicked", G_CALLBACK(_static_click), this);
 	}
 };
@@ -144,6 +147,7 @@ class TextView : public Widget
 {
 public:
 	GtkTextBuffer* buffer;
+
 	TextView(const char* text = "")
 	{
 		buffer = gtk_text_buffer_new(0);
@@ -211,10 +215,12 @@ class Edit : public Widget
 {
 private:
 	std::function<void()> _activate = [](){};
+
 	static void _static_activate(GtkWidget* b, void* data)
 	{
 		reinterpret_cast<Edit*>(data)->_activate();
 	}
+
 public:
 	Edit()
 	{
@@ -231,4 +237,68 @@ public:
 	void setText(const std::string& text) { gtk_entry_set_text(GTK_ENTRY(handle), text.c_str()); }
 
 	const char* text() { return gtk_entry_get_text(GTK_ENTRY(handle)); }
+};
+
+class Menu;
+
+class MenuItem : public Widget
+{
+private:
+	std::function<void()> _activate = [](){};
+
+	static void _static_activate(GtkWidget* w, void* d)
+	{
+		reinterpret_cast<MenuItem*>(d)->_activate();
+	}
+
+public:
+	MenuItem(const char* text)
+	{
+		handle = gtk_menu_item_new_with_label(text);
+	}
+	~MenuItem() {}
+
+	void addMenu(Menu* menu);
+
+	template <class F> void onActivate(const F& f)
+	{
+		_activate = f;
+		g_signal_connect(G_OBJECT(handle), "activate", G_CALLBACK(_static_activate), this);
+	}
+};
+
+class Menu : public Widget
+{
+public:
+	Menu()
+	{
+		handle = gtk_menu_new();
+	}
+
+	~Menu() {}
+
+	MenuItem* add(MenuItem* item)
+	{
+		widgets.push_back(item);
+		gtk_menu_shell_append(GTK_MENU_SHELL(handle), item->handle);
+		return item;
+	}
+};
+
+class MenuBar : public Widget
+{
+public:
+	MenuBar()
+	{
+		handle = gtk_menu_bar_new();
+	}
+
+	~MenuBar() {}
+
+	MenuItem* add(MenuItem* item)
+	{
+		widgets.push_back(item);
+		gtk_menu_shell_append(GTK_MENU_SHELL(handle), item->handle);
+		return item;
+	}
 };

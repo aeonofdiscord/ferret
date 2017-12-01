@@ -424,6 +424,11 @@ void addNodes(TextView* view)
 	}
 }
 
+void quit()
+{
+	g_application_quit(G_APPLICATION(app->handle));
+}
+
 void activate()
 {
 	auto provider = gtk_css_provider_new();
@@ -437,6 +442,14 @@ void activate()
 	w->setTitle("ferret");
 	w->setDefaultSize(1280, 1024);
 	Box* main = w->add(new Box(Box::VERTICAL));
+
+	auto menubar = main->insert(new MenuBar());
+	auto fileMenu = new Menu();
+	auto fileMi = menubar->add(new MenuItem("File"));
+	auto quitMi = fileMenu->add(new MenuItem("Quit"));
+	fileMi->addMenu(fileMenu);
+	quitMi->onActivate(quit);
+
 	Box* addressBar = main->insert(new Box(Box::HORIZONTAL));
 	Button* back = addressBar->insert(new Button("Back"), false, false);
 	back->onClick(backClick);

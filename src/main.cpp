@@ -63,6 +63,7 @@ std::vector<Node> nodes;
 std::vector<History> history;
 std::vector<Link> links;
 std::string location;
+int historyPos = 0;
 
 std::unique_ptr<Application> app;
 std::unique_ptr<Window> w;
@@ -219,10 +220,17 @@ bool syncDownload(const std::string& host, const std::string& port, const std::s
 }
 
 void addNodes(TextView* view);
-void go(const char* url, bool addToHistory = true)
+void go(const char* url, bool addToHistory = true, bool clearFuture = true)
 {
 	if(addToHistory)
+	{
+		if(history.size() && clearFuture)
+		{
+			history.erase(history.begin() + historyPos, history.end());
+		}
+		++historyPos;
 		history.push_back({url});
+	}
 	address->setText(url);
 	nodes.clear();
 	std::string addr = url;
@@ -308,11 +316,21 @@ void goClick()
 
 void backClick()
 {
-	if(history.size() > 0)
+	if(historyPos > 1)
 	{
-		std::string url = history.back().url;
-		history.pop_back();
+		--historyPos;
+		std::string url = history[historyPos-1].url;
 		go(url.c_str(), false);
+	}
+}
+
+void forwardClick()
+{
+	if(historyPos < int(history.size()))
+	{
+		++historyPos;
+		std::string url = history[historyPos-1].url;
+		go(url.c_str(), false, false);
 	}
 }
 
@@ -422,7 +440,8 @@ void activate()
 	Box* addressBar = main->insert(new Box(Box::HORIZONTAL));
 	Button* back = addressBar->insert(new Button("Back"), false, false);
 	back->onClick(backClick);
-	//Button* forward = addressBar->insert(new Button("Forward"), false, false);
+	Button* forward = addressBar->insert(new Button("Forward"), false, false);
+	forward->onClick(forwardClick);
 	Button* up = addressBar->insert(new Button("Up"), false, false);
 	up->onClick(upClick);
 	address = addressBar->insert(new Edit, true, true);

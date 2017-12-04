@@ -6,10 +6,10 @@
 #include <cstring>
 #include <iostream>
 #include "net.h"
+#include "queue.h"
 #include "worker.h"
 #include <sys/socket.h>
 
-const int DL_BUFFER_SIZE = 0x100000;
 char* downloadBuffer = new char[DL_BUFFER_SIZE];
 std::mutex mtx;
 bool running = true;
@@ -23,6 +23,7 @@ struct Downloader
 	std::string error;
 	std::unique_ptr<std::ostream> file;
 	enum State { START, DOWNLOADING, FINISHED, FAILED, } state;
+	enum Type { SAVE, QUEUE_DATA, } type;
 
 	void startDownload();
 	void update();
@@ -31,16 +32,20 @@ std::vector<Downloader*> downloaders;
 
 void Downloader::startDownload()
 {
-	tmp_path = local_path+".part";
-	std::cout << "Downloading " << remotePath << " to " << local_path << "\n";
 	std::string remote = remotePath;
 	if(remote.find("gopher://")==0) remote = remote.substr(9);
-	file.reset(new std::ofstream(tmp_path.c_str(), std::ios::binary));
-	if(!file->good())
+	if(type == SAVE)
 	{
-		state = FAILED;
-		error = "could not open file for writing";
-		return;
+		tmp_path = local_path+".part";
+		std::cout << "Downloading " << remotePath << " to " << local_path << "\n";
+
+		file.reset(new std::ofstream(tmp_path.c_str(), std::ios::binary));
+		if(!file->good())
+		{
+			state = FAILED;
+			error = "could not open file for writing";
+			return;
+		}
 	}
 	std::string host = remote.substr(0, remote.find("/"));
 	host = host.substr(0, host.find(":"));
@@ -51,7 +56,18 @@ void Downloader::startDownload()
 		port = port.substr(0, port.find("/"));
 	}
 	std::string file = remote.substr(remote.find("/")+1);
-	file = file.substr(file.find("/"));
+	auto s = file.find("/");
+	if(s != std::string::npos)
+	{
+		file = file.substr(s);
+		auto t = file.find("/", 1);
+		if(t != std::string::npos)
+		{
+			file.erase(t+1, file.size());
+		}
+	}
+	else
+		file = "";
 	Result r = opensocket(host.c_str(), port.c_str());
 	if(r.result == -1)
 	{
@@ -82,13 +98,17 @@ void Downloader::update()
 	{
 		error = strerror(errno);
 		state = FAILED;
-		return;
 	}
 	else if(r == 0)
+	{
 		state = FINISHED;
+	}
 	else
 	{
-		file->write(downloadBuffer, r);
+		if(type == SAVE)
+			file->write(downloadBuffer, r);
+		else
+			queueData(Message::DATA, downloadBuffer, r);
 	}
 }
 
@@ -117,15 +137,25 @@ void pollDownloaders()
 		d->update();
 		if(d->state == Downloader::FINISHED)
 		{
-			std::cout << "Download finished: " << d->local_path << "\n";
-			if(rename(d->tmp_path.c_str(), d->local_path.c_str()))
-				std::cout << "Failed to rename " << d->tmp_path << " to " << d->local_path << "\n";
+			if(d->type == Downloader::SAVE)
+			{
+				std::cout << "Download finished: " << d->local_path << "\n";
+				if(rename(d->tmp_path.c_str(), d->local_path.c_str()))
+					std::cout << "Failed to rename " << d->tmp_path << " to " << d->local_path << "\n";
+			}
 			i = downloaders.erase(i);
 			continue;
 		}
 		else if(d->state == Downloader::FAILED)
 		{
-			std::cout << "Downloading "<<d->local_path<<" failed: " << d->error << "\n";
+			if(d->type == Downloader::SAVE)
+			{
+				std::cout << "Downloading "<< d->local_path <<" failed: " << d->error << "\n";
+			}
+			else if(d->type == Downloader::QUEUE_DATA)
+			{
+				queueData(Message::ERROR, d->error);
+			}
 			i = downloaders.erase(i);
 			continue;
 		}
@@ -148,6 +178,17 @@ void endWorker()
 	running = false;
 }
 
+void fetch(const std::string& remote_path, int type)
+{
+	std::unique_lock<std::mutex> lock(mtx);
+	Downloader* d = new Downloader;
+	d->socket = -1;
+	d->remotePath = remote_path;
+	d->state = Downloader::START;
+	d->type = Downloader::QUEUE_DATA;
+	downloaders.push_back(d);
+}
+
 void download(const std::string& remote_path, const std::string& local_path)
 {
 	std::unique_lock<std::mutex> lock(mtx);
@@ -156,5 +197,6 @@ void download(const std::string& remote_path, const std::string& local_path)
 	d->remotePath = remote_path;
 	d->local_path = local_path;
 	d->state = Downloader::START;
+	d->type = Downloader::SAVE;
 	downloaders.push_back(d);
 }

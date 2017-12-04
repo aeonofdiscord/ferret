@@ -1,5 +1,12 @@
 #include "str.h"
 
+std::string lstrip(std::string& s)
+{
+	while(s.size() > 0 && isspace(s[0]))
+		s.erase(0, 1);
+	return s;
+}
+
 std::string replaceAll(std::string& str, const std::string& f, const std::string& r)
 {
 	auto i = str.find(f);
@@ -9,6 +16,13 @@ std::string replaceAll(std::string& str, const std::string& f, const std::string
 		i = str.find(f);
 	}
 	return str;
+}
+
+std::string rstrip(std::string& s)
+{
+	while(s.size() > 0 && isspace(s[s.size()-1]))
+		s.erase(s.size()-1);
+	return s;
 }
 
 void slice(std::string& str, size_t start, size_t end)
@@ -21,18 +35,23 @@ void slice(std::string& str, size_t start, size_t end)
 	str.erase(end, str.size());
 }
 
-std::string rstrip(std::string& s)
+void splitLines(const std::string& str, std::vector<std::string>& lines)
 {
-	while(s.size() > 0 && isspace(s[s.size()-1]))
-		s.erase(s.size()-1);
-	return s;
-}
-
-std::string lstrip(std::string& s)
-{
-	while(s.size() > 0 && isspace(s[0]))
-		s.erase(0, 1);
-	return s;
+	size_t i = 0;
+	while(i < str.size())
+	{
+		size_t l = str.find("\n", i);
+		if(l != std::string::npos)
+		{
+			lines.push_back(str.substr(i, l-i));
+			i = l+1;
+		}
+		else
+		{
+			lines.push_back(str);
+			break;
+		}
+	}
 }
 
 std::string strip(std::string& s)

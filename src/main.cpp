@@ -6,8 +6,10 @@
 #include <vector>
 #include <memory>
 #include <thread>
+#include <mutex>
 #include <fstream>
 #include "net.h"
+#include "queue.h"
 #include "str.h"
 #include "worker.h"
 #include "ui.h"
@@ -54,16 +56,19 @@ struct Link
 };
 
 const size_t npos = std::string::npos;
-const int SEARCHBOX_HEIGHT = 28;
 const char* HOME = "gopher://gopher.quux.org";
-int ICON_SIZE = 24;
 
-std::vector<std::string> lines;
 std::vector<Node> nodes;
-std::vector<History> history;
 std::vector<Link> links;
-std::string location;
+
+std::vector<History> history;
 int historyPos = 0;
+
+std::string location;
+int displayType = TYPE_DIR;
+
+std::vector<Message> dataQueue;
+std::mutex queueMtx;
 
 std::unique_ptr<Application> app;
 std::unique_ptr<Window> w;
@@ -100,9 +105,10 @@ int docType(int code)
 	}
 }
 
-void parseList()
+void parseList(const std::string& data, std::vector<Node>& nodes)
 {
-	nodes.clear();
+	std::vector<std::string> lines;
+	splitLines(data, lines);
 	for(std::string& line : lines)
 	{
 		if(line.size() > 1)
@@ -151,77 +157,42 @@ std::string filetype(const std::string& path)
 	return path.substr(i);
 }
 
-void showText(const std::string& data)
+void showText(const std::string& data, std::vector<Node>& nodes)
 {
-	nodes.clear();
-
 	std::vector<std::string> lines;
-	lines.push_back("");
-	for(size_t i = 0; i < data.size(); ++i)
-	{
-		if(data[i] == '\n')
-		{
-			lines.back() += "\n";
-			lines.push_back("");
-		}
-		else if(data[i] == '.' && i == data.size()-1)
-			break;
-		else if(data[i] != '\r')
-			lines.back() += data[i];
-	}
+	splitLines(data, lines);
 	for(auto& l : lines)
 	{
 		Node n;
 		n.type = TYPE_TEXT;
-		n.text = l;
+		n.text = l + "\n";
 		nodes.push_back(n);
 	}
 }
 
-bool syncDownload(const std::string& host, const std::string& port, const std::string& req, std::string& data)
+void showNodes(TextView* view, const std::vector<Node>& nodes);
+
+void showMessage(const std::string& data)
 {
-	auto r = opensocket(host.c_str(), port.c_str());
-	if(r.result == -1)
-	{
-		std::cerr << r.error << "\n";
-		showText(r.error);
-		return false;
-	}
-	int s = r.result;
-
-	int opt = 1;
-	setsockopt(s, SOL_TCP, TCP_NODELAY, &opt, sizeof(opt));
-
-	int e = send(s, req.c_str(), req.size(), 0);
-	if(e == -1)
-	{
-		std::cerr << strerror(errno) << "\n";
-		showText(strerror(errno));
-		return false;
-	}
-	char buffer[4096];
-	while(true)
-	{
-		int bytes = recv(s, buffer, 4096, 0);
-		if(bytes == -1)
-		{
-			std::cout << strerror(errno) << "\n";
-			showText(strerror(errno));
-			close(s);
-			return false;
-		}
-		else if(bytes)
-			data.append(buffer, buffer+bytes);
-		else
-			break;
-	}
-	close(s);
-	return true;
+	nodes.clear();
+	showText(data, nodes);
+	showNodes(view, nodes);
 }
 
-void addNodes(TextView* view);
+void queueData(Message::Type t, const char* d, size_t sz)
+{
+	std::unique_lock<std::mutex> lock(queueMtx);
+	dataQueue.push_back({t, std::string(d, sz)});
+}
+
+void queueData(Message::Type t, const std::string& d)
+{
+	queueData(t, d.c_str(), d.size());
+}
+
 void go(const char* url, bool addToHistory = true, bool clearFuture = true)
 {
+	view->clear();
 	if(addToHistory)
 	{
 		if(history.size() && clearFuture)
@@ -268,44 +239,15 @@ void go(const char* url, bool addToHistory = true, bool clearFuture = true)
 		path.erase(0, path.rfind("/")+1);
 		path = std::string(userHome())+"/Downloads/"+path;
 		download(url, strip(path));
-		showText(std::string("Downloading ") + url + " to " + path);
+		showMessage(std::string("Downloading ") + url + " to " + path);
 	}
 	else
 	{
 		location = url;
 		address->setText(location);
-		std::string data;
-		if(syncDownload(host, port, req, data))
-		{
-			lines.clear();
-			if(type == TYPE_DIR)
-			{
-				while(data.size())
-				{
-					size_t l = data.find("\n");
-					if(l != std::string::npos)
-					{
-						lines.push_back(data.substr(0, l));
-						data.erase(0, l+1);
-					}
-					else
-					{
-						lines.push_back(data);
-						break;
-					}
-				}
-				parseList();
-			}
-			else if(type == TYPE_FILE)
-			{
-				strip(data);
-				if(data.size() > 0 && data[data.size()-1] == '.')
-					data.erase(data.size()-1);
-				showText(data);
-			}
-		}
+		fetch(location, type);
+		displayType = type;
 	}
-	addNodes(view);
 }
 
 void goClick()
@@ -411,9 +353,8 @@ void addLink(GtkTextBuffer* buffer, GtkTextTag* tag, const std::string& text, co
 	links.push_back({start, start+int(text.size()), url});
 }
 
-void addNodes(TextView* view)
+void showNodes(TextView* view, const std::vector<Node>& nodes)
 {
-	view->clear();
 	auto tag = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(view->buffer), "link");
 	for(auto& n : nodes)
 	{
@@ -468,8 +409,6 @@ void activate()
 	view = scroll->add(new TextView());
 	view->setMargin(10, 10, 10, 10);
 
-	addNodes(view);
-
 	view->setEditable(false);
 	view->showCursor(false);
 	w->showAll();
@@ -484,12 +423,41 @@ void activate()
 	}
 }
 
+int idle(void*)
+{
+	std::unique_lock<std::mutex> lock(queueMtx);
+	std::vector<Node> nodes;
+	while(dataQueue.size())
+	{
+		auto& m = dataQueue[0];
+		if(m.type == Message::DATA)
+		{
+			if(displayType == TYPE_DIR)
+			{
+				parseList(dataQueue[0].data, nodes);
+			}
+			else
+			{
+				showText(m.data, nodes);
+			}
+		}
+		else if(m.type == Message::ERROR)
+		{
+			showText(m.data, nodes);
+		}
+		showNodes(view, nodes);
+		dataQueue.erase(dataQueue.begin());
+	}
+	return 1;
+}
+
 int main(int argc, char** argv)
 {
 	app.reset(new Application("test.app", 0));
 	app->onActivate(activate);
 
 	std::thread worker(runWorker);
+	g_idle_add(idle, 0);
 	int status = app->run(argc, argv);
 	endWorker();
 	worker.join();

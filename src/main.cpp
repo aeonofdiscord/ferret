@@ -175,6 +175,7 @@ void showNodes(TextView* view, const std::vector<Node>& nodes);
 void showMessage(const std::string& data)
 {
 	nodes.clear();
+	links.clear();
 	showText(data, nodes);
 	showNodes(view, nodes);
 }
@@ -204,6 +205,7 @@ void go(const char* url, bool addToHistory = true, bool clearFuture = true)
 	}
 	address->setText(url);
 	nodes.clear();
+	links.clear();
 	std::string addr = url;
 	if(addr.find("gopher://")==0)
 	{
@@ -350,7 +352,7 @@ void addLink(GtkTextBuffer* buffer, GtkTextTag* tag, const std::string& text, co
 	gtk_text_buffer_get_iter_at_offset(view->buffer, &end, -1);
 	int start = gtk_text_iter_get_offset(&end);
 	gtk_text_buffer_insert_with_tags(view->buffer, &end, text.c_str(), text.size(), tag, nullptr);
-	links.push_back({start, start+int(text.size()), url});
+	links.push_back({start, start+int(text.size()-1), url});
 }
 
 void showNodes(TextView* view, const std::vector<Node>& nodes)
@@ -423,30 +425,37 @@ void activate()
 	}
 }
 
-int idle(void*)
+void popQueue(std::vector<Node>& nodes)
 {
 	std::unique_lock<std::mutex> lock(queueMtx);
-	std::vector<Node> nodes;
-	while(dataQueue.size())
+	if(!dataQueue.size())
+		return;
+	auto& m = dataQueue[0];
+	if(m.type == Message::DATA)
 	{
-		auto& m = dataQueue[0];
-		if(m.type == Message::DATA)
+		if(displayType == TYPE_DIR)
 		{
-			if(displayType == TYPE_DIR)
-			{
-				parseList(dataQueue[0].data, nodes);
-			}
-			else
-			{
-				showText(m.data, nodes);
-			}
+			parseList(m.data, nodes);
 		}
-		else if(m.type == Message::ERROR)
+		else
 		{
 			showText(m.data, nodes);
 		}
+	}
+	else if(m.type == Message::ERROR)
+	{
+		showText(m.data, nodes);
+	}
+	dataQueue.erase(dataQueue.begin());
+}
+
+int idle(void*)
+{
+	std::vector<Node> nodes;
+	while(dataQueue.size())
+	{
+		popQueue(nodes);
 		showNodes(view, nodes);
-		dataQueue.erase(dataQueue.begin());
 	}
 	return 1;
 }

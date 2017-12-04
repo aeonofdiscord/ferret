@@ -10,6 +10,7 @@
 #include "worker.h"
 #include <sys/socket.h>
 
+const int TIMEOUT_LENGTH = 10;
 char* downloadBuffer = new char[DL_BUFFER_SIZE];
 std::mutex mtx;
 bool running = true;
@@ -22,16 +23,18 @@ struct Downloader
 	std::string tmp_path;
 	std::string error;
 	std::unique_ptr<std::ostream> file;
-	enum State { START, DOWNLOADING, FINISHED, FAILED, } state;
+	time_t startTime;
+	enum State { START, CONNECTING, DOWNLOADING, FINISHED, FAILED, } state;
 	enum Type { SAVE, QUEUE_DATA, } type;
 
 	void startDownload();
-	void update();
+	void update(fd_set* r, fd_set* w);
 };
 std::vector<Downloader*> downloaders;
 
 void Downloader::startDownload()
 {
+	startTime = time(0);
 	std::string remote = remotePath;
 	if(remote.find("gopher://")==0) remote = remote.substr(9);
 	if(type == SAVE)
@@ -55,19 +58,7 @@ void Downloader::startDownload()
 		port = remote.substr(remote.find(":")+1);
 		port = port.substr(0, port.find("/"));
 	}
-	std::string file = remote.substr(remote.find("/")+1);
-	auto s = file.find("/");
-	if(s != std::string::npos)
-	{
-		file = file.substr(s);
-		auto t = file.find("/", 1);
-		if(t != std::string::npos)
-		{
-			file.erase(t+1, file.size());
-		}
-	}
-	else
-		file = "";
+
 	Result r = opensocket(host.c_str(), port.c_str());
 	if(r.result == -1)
 	{
@@ -76,65 +67,101 @@ void Downloader::startDownload()
 		return;
 	}
 	socket = r.result;
-	int e = send(socket, (file+"\r\n").c_str(), file.size()+2, 0);
-	if(e == -1)
-	{
-		error = strerror(errno);
-		state = FAILED;
-		return;
-	}
-	state = DOWNLOADING;
+
+	state = CONNECTING;
 }
 
-void Downloader::update()
+void Downloader::update(fd_set* rd, fd_set* wr)
 {
 	if(state == START)
 	{
 		startDownload();
 		return;
 	}
-	int r = recv(socket, downloadBuffer, DL_BUFFER_SIZE, 0);
-	if(r == -1)
+	else if(state == CONNECTING)
 	{
-		error = strerror(errno);
-		state = FAILED;
-	}
-	else if(r == 0)
-	{
-		state = FINISHED;
-	}
-	else
-	{
-		if(type == SAVE)
-			file->write(downloadBuffer, r);
+		if(FD_ISSET(socket, wr))
+		{
+			std::string remote = remotePath;
+			if(remote.find("gopher://")==0) remote = remote.substr(9);
+			std::string file = remote.substr(remote.find("/")+1);
+			auto s = file.find("/");
+			if(s != std::string::npos)
+			{
+				file = file.substr(s);
+			}
+			else
+				file = "";
+			int e = send(socket, (file+"\r\n").c_str(), file.size()+2, 0);
+			if(e == -1)
+			{
+				error = strerror(errno);
+				state = FAILED;
+			}
+			else
+				state = DOWNLOADING;
+			return;
+		}
 		else
-			queueData(Message::DATA, downloadBuffer, r);
+		{
+			time_t now = time(0);
+			if(now - startTime > TIMEOUT_LENGTH)
+			{
+				state = FAILED;
+				error = "Timeout";
+			}
+		}
+	}
+	else if(FD_ISSET(socket, rd))
+	{
+		int r = recv(socket, downloadBuffer, DL_BUFFER_SIZE, 0);
+		if(r == -1)
+		{
+			error = strerror(errno);
+			state = FAILED;
+		}
+		else if(r == 0)
+		{
+			state = FINISHED;
+		}
+		else
+		{
+			if(type == SAVE)
+				file->write(downloadBuffer, r);
+			else
+				queueData(Message::DATA, downloadBuffer, r);
+		}
 	}
 }
 
 void pollDownloaders()
 {
 	std::unique_lock<std::mutex> lock(mtx);
-	fd_set set;
-	FD_ZERO(&set);
+	if(!downloaders.size())
+		return;
+	fd_set r;
+	fd_set w;
+	FD_ZERO(&r);
+	FD_ZERO(&w);
 	int max = 0;
 	for(auto& d : downloaders)
 	{
 		if(d->socket != -1)
 		{
-			FD_SET(d->socket, &set);
+			FD_SET(d->socket, &r);
+			FD_SET(d->socket, &w);
 			if(max < d->socket)
 				max = d->socket;
 		}
 	}
 	timeval tv;
 	tv.tv_sec = 0;
-	tv.tv_usec = 50;
-	select(max+1, &set, 0, 0, &tv);
+	tv.tv_usec = 10;
+	select(max+1, &r, &w, 0, &tv);
 	for(auto i = downloaders.begin(); i != downloaders.end();)
 	{
 		auto& d = *i;
-		d->update();
+		d->update(&r, &w);
 		if(d->state == Downloader::FINISHED)
 		{
 			if(d->type == Downloader::SAVE)
@@ -180,23 +207,23 @@ void endWorker()
 
 void fetch(const std::string& remote_path, int type)
 {
-	std::unique_lock<std::mutex> lock(mtx);
 	Downloader* d = new Downloader;
 	d->socket = -1;
 	d->remotePath = remote_path;
 	d->state = Downloader::START;
 	d->type = Downloader::QUEUE_DATA;
+	std::unique_lock<std::mutex> lock(mtx);
 	downloaders.push_back(d);
 }
 
 void download(const std::string& remote_path, const std::string& local_path)
 {
-	std::unique_lock<std::mutex> lock(mtx);
 	Downloader* d = new Downloader;
 	d->socket = -1;
 	d->remotePath = remote_path;
 	d->local_path = local_path;
 	d->state = Downloader::START;
 	d->type = Downloader::SAVE;
+	std::unique_lock<std::mutex> lock(mtx);
 	downloaders.push_back(d);
 }

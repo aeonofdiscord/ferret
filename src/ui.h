@@ -50,6 +50,14 @@ class Widget
 public:
 	GtkWidget* handle = 0;
 	std::vector<Widget*> widgets;
+
+	Widget() : handle(0) {}
+
+	~Widget()
+	{
+		for(auto w : widgets)
+			delete w;
+	}
 };
 
 class Window : public Widget
@@ -59,11 +67,7 @@ public:
 	{
 		handle = gtk_application_window_new(app->handle);
 	}
-	~Window()
-	{
-		for(auto w : widgets)
-			delete w;
-	}
+	~Window() {}
 
 	template <class W> W* add(W* w)
 	{
@@ -112,7 +116,6 @@ class Box : public Widget
 public:
 	static const GtkOrientation HORIZONTAL = GTK_ORIENTATION_HORIZONTAL;
 	static const GtkOrientation VERTICAL = GTK_ORIENTATION_VERTICAL;
-	std::vector<Widget*> children;
 
 	Box(GtkOrientation orientation, int spacing = 0)
 	{
@@ -123,14 +126,14 @@ public:
 	template <class W> W* insert(W* child, bool expand = false, bool fill = false, int padding = 0)
 	{
 		gtk_box_pack_start(GTK_BOX(handle), child->handle, expand, fill, padding);
-		children.insert(children.begin(), child);
+		widgets.insert(widgets.begin(), child);
 		return child;
 	}
 
 	template <class W> W* push(W* child, bool expand = false, bool fill = false, int padding = 0)
 	{
 		gtk_box_pack_end(GTK_BOX(handle), child->handle, expand, fill, padding);
-		children.push_back(child);
+		widgets.push_back(child);
 		return child;
 	}
 

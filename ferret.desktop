@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Ferret
+Comment=A gopher browser
+Exec=ferret
+Icon=ferret-browser
+Type=Application
+StartupWMClass=ferret
+Categories=GTK;GNOME;Internet;Browser;

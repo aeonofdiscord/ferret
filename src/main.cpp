@@ -14,6 +14,8 @@
 #include "worker.h"
 #include "ui.h"
 
+const std::string RESOURCE_PATH = "/usr/local/share/ferret/";
+
 enum NodeType
 {
 	TYPE_DIR,
@@ -74,6 +76,8 @@ std::unique_ptr<Application> app;
 std::unique_ptr<Window> w;
 TextView* view = 0;
 Edit* address = 0;
+int currentRequest = 0;
+std::string data;
 
 const char* userHome()
 {
@@ -180,20 +184,21 @@ void showMessage(const std::string& data)
 	showNodes(view, nodes);
 }
 
-void queueData(Message::Type t, const char* d, size_t sz)
+void queueData(int reqid, Message::Type t, const char* d, size_t sz)
 {
 	std::unique_lock<std::mutex> lock(queueMtx);
-	dataQueue.push_back({t, std::string(d, sz)});
+	dataQueue.push_back({reqid, t, std::string(d, sz)});
 }
 
-void queueData(Message::Type t, const std::string& d)
+void queueData(int reqid, Message::Type t, const std::string& d)
 {
-	queueData(t, d.c_str(), d.size());
+	queueData(reqid, t, d.c_str(), d.size());
 }
 
 void go(const char* url, bool addToHistory = true, bool clearFuture = true)
 {
 	view->clear();
+	data = "";
 	if(addToHistory)
 	{
 		if(history.size() && clearFuture)
@@ -247,7 +252,7 @@ void go(const char* url, bool addToHistory = true, bool clearFuture = true)
 	{
 		location = url;
 		address->setText(location);
-		fetch(location, type);
+		fetch(++currentRequest, location, type);
 		displayType = type;
 	}
 }
@@ -369,26 +374,44 @@ void showNodes(TextView* view, const std::vector<Node>& nodes)
 
 void quit()
 {
-	g_application_quit(G_APPLICATION(app->handle));
+	app->quit();
+}
+
+void save()
+{
+	auto save = gtk_file_chooser_dialog_new("Save", GTK_WINDOW(w->handle), GTK_FILE_CHOOSER_ACTION_SAVE,
+			"_Save", GTK_RESPONSE_ACCEPT,
+			"_Cancel", GTK_RESPONSE_CANCEL,
+			nullptr);
+	gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(save), true);
+	auto res = gtk_dialog_run(GTK_DIALOG(save));
+	if(res == GTK_RESPONSE_ACCEPT)
+	{
+		std::string filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(save));
+		std::ofstream file(filename.c_str());
+		file.write(data.c_str(), data.size());
+	}
+	gtk_widget_destroy(save);
 }
 
 void activate()
 {
-	auto provider = gtk_css_provider_new();
-	gtk_css_provider_load_from_data(provider, read("style.css").c_str(), -1, 0);
-
 	w.reset(new Window(app.get()));
-
-	auto screen = gdk_screen_get_default();
-	gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
 	w->setTitle("ferret");
 	w->setDefaultSize(1280, 1024);
 	Box* main = w->add(new Box(Box::VERTICAL));
 
+	auto provider = gtk_css_provider_new();
+	gtk_css_provider_load_from_data(provider, read((RESOURCE_PATH + "style.css").c_str()).c_str(), -1, 0);
+	auto screen = gdk_screen_get_default();
+	gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
 	auto menubar = main->insert(new MenuBar());
 	auto fileMenu = new Menu();
 	auto fileMi = menubar->add(new MenuItem("File"));
+	auto saveMi = fileMenu->add(new MenuItem("Save"));
+	saveMi->onActivate(save);
 	auto quitMi = fileMenu->add(new MenuItem("Quit"));
 	fileMi->addMenu(fileMenu);
 	quitMi->onActivate(quit);
@@ -431,32 +454,40 @@ void popQueue(std::vector<Node>& nodes)
 	if(!dataQueue.size())
 		return;
 	auto& m = dataQueue[0];
-	if(m.type == Message::DATA)
+	if(m.reqid == currentRequest)
 	{
-		if(displayType == TYPE_DIR)
+		if(m.type == Message::DATA)
 		{
-			parseList(m.data, nodes);
+			data += m.data;
+			if(displayType == TYPE_DIR)
+			{
+				parseList(m.data, nodes);
+			}
+			else
+			{
+				showText(m.data, nodes);
+			}
 		}
-		else
+		else if(m.type == Message::ERROR)
 		{
 			showText(m.data, nodes);
 		}
 	}
-	else if(m.type == Message::ERROR)
-	{
-		showText(m.data, nodes);
-	}
+	else
+		std::cout << "discarded " << m.data.size() << " bytes from req " << m.reqid << "\n";
 	dataQueue.erase(dataQueue.begin());
 }
 
 int idle(void*)
 {
+	if(!dataQueue.size())
+		return 1;
 	std::vector<Node> nodes;
 	while(dataQueue.size())
 	{
 		popQueue(nodes);
-		showNodes(view, nodes);
 	}
+	showNodes(view, nodes);
 	return 1;
 }
 
@@ -466,7 +497,7 @@ int main(int argc, char** argv)
 	app->onActivate(activate);
 
 	std::thread worker(runWorker);
-	g_idle_add(idle, 0);
+	g_timeout_add(10, idle, 0);
 	int status = app->run(argc, argv);
 	endWorker();
 	worker.join();

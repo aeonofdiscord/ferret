@@ -9,6 +9,7 @@
 #include "queue.h"
 #include "worker.h"
 #include <sys/socket.h>
+#include <unistd.h>
 
 const int TIMEOUT_LENGTH = 10;
 char* downloadBuffer = new char[DL_BUFFER_SIZE];
@@ -18,12 +19,13 @@ bool running = true;
 struct Downloader
 {
 	int socket;
-	std::string remotePath;
+	int reqid;
+	std::string remote_path;
 	std::string local_path;
 	std::string tmp_path;
 	std::string error;
 	std::unique_ptr<std::ostream> file;
-	time_t startTime;
+	time_t start_time;
 	enum State { START, CONNECTING, DOWNLOADING, FINISHED, FAILED, } state;
 	enum Type { SAVE, QUEUE_DATA, } type;
 
@@ -34,13 +36,13 @@ std::vector<Downloader*> downloaders;
 
 void Downloader::startDownload()
 {
-	startTime = time(0);
-	std::string remote = remotePath;
+	start_time = time(0);
+	std::string remote = remote_path;
 	if(remote.find("gopher://")==0) remote = remote.substr(9);
 	if(type == SAVE)
 	{
 		tmp_path = local_path+".part";
-		std::cout << "Downloading " << remotePath << " to " << local_path << "\n";
+		std::cout << "Downloading " << remote_path << " to " << local_path << "\n";
 
 		file.reset(new std::ofstream(tmp_path.c_str(), std::ios::binary));
 		if(!file->good())
@@ -82,7 +84,7 @@ void Downloader::update(fd_set* rd, fd_set* wr)
 	{
 		if(FD_ISSET(socket, wr))
 		{
-			std::string remote = remotePath;
+			std::string remote = remote_path;
 			if(remote.find("gopher://")==0) remote = remote.substr(9);
 			std::string file = remote.substr(remote.find("/")+1);
 			auto s = file.find("/");
@@ -105,7 +107,7 @@ void Downloader::update(fd_set* rd, fd_set* wr)
 		else
 		{
 			time_t now = time(0);
-			if(now - startTime > TIMEOUT_LENGTH)
+			if(now - start_time > TIMEOUT_LENGTH)
 			{
 				state = FAILED;
 				error = "Timeout";
@@ -129,7 +131,7 @@ void Downloader::update(fd_set* rd, fd_set* wr)
 			if(type == SAVE)
 				file->write(downloadBuffer, r);
 			else
-				queueData(Message::DATA, downloadBuffer, r);
+				queueData(reqid, Message::DATA, downloadBuffer, r);
 		}
 	}
 }
@@ -156,7 +158,7 @@ void pollDownloaders()
 	}
 	timeval tv;
 	tv.tv_sec = 0;
-	tv.tv_usec = 10;
+	tv.tv_usec = 0;
 	select(max+1, &r, &w, 0, &tv);
 	for(auto i = downloaders.begin(); i != downloaders.end();)
 	{
@@ -181,7 +183,7 @@ void pollDownloaders()
 			}
 			else if(d->type == Downloader::QUEUE_DATA)
 			{
-				queueData(Message::ERROR, d->error);
+				queueData(d->reqid, Message::ERROR, d->error);
 			}
 			i = downloaders.erase(i);
 			continue;
@@ -197,6 +199,7 @@ void runWorker()
 	while(running)
 	{
 		pollDownloaders();
+		usleep(1000);
 	}
 }
 
@@ -205,11 +208,13 @@ void endWorker()
 	running = false;
 }
 
-void fetch(const std::string& remote_path, int type)
+void fetch(int reqid, const std::string& remote_path, int type)
 {
 	Downloader* d = new Downloader;
+	d->reqid = reqid;
 	d->socket = -1;
-	d->remotePath = remote_path;
+	d->remote_path = remote_path;
+	d->local_path = "";
 	d->state = Downloader::START;
 	d->type = Downloader::QUEUE_DATA;
 	std::unique_lock<std::mutex> lock(mtx);
@@ -219,8 +224,9 @@ void fetch(const std::string& remote_path, int type)
 void download(const std::string& remote_path, const std::string& local_path)
 {
 	Downloader* d = new Downloader;
+	d->reqid = -1;
 	d->socket = -1;
-	d->remotePath = remote_path;
+	d->remote_path = remote_path;
 	d->local_path = local_path;
 	d->state = Downloader::START;
 	d->type = Downloader::SAVE;

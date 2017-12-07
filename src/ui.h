@@ -74,6 +74,13 @@ public:
 
 	void setDefaultSize(int w, int h) { gtk_window_set_default_size(GTK_WINDOW(handle), w, h); }
 
+	void setIcon(const char* path)
+	{
+		auto icon = gdk_pixbuf_new_from_file(path, 0);
+		gtk_window_set_icon(GTK_WINDOW(handle), icon);
+		g_object_unref(G_OBJECT(icon));
+	}
+
 	void setTitle(const char* title) { gtk_window_set_title(GTK_WINDOW(handle), title); }
 
 	void showAll() { gtk_widget_show_all(handle); }

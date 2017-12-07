@@ -48,7 +48,7 @@ void splitLines(const std::string& str, std::vector<std::string>& lines)
 		}
 		else
 		{
-			lines.push_back(str);
+			lines.push_back(str.substr(i));
 			break;
 		}
 	}

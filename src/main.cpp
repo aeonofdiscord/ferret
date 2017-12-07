@@ -78,6 +78,7 @@ TextView* view = 0;
 Edit* address = 0;
 int currentRequest = 0;
 std::string data;
+std::string incompleteData;
 
 const char* userHome()
 {
@@ -379,11 +380,12 @@ void quit()
 
 void save()
 {
-	auto save = gtk_file_chooser_dialog_new("Save", GTK_WINDOW(w->handle), GTK_FILE_CHOOSER_ACTION_SAVE,
+	auto save = GTK_FILE_CHOOSER(gtk_file_chooser_dialog_new("Save", GTK_WINDOW(w->handle), GTK_FILE_CHOOSER_ACTION_SAVE,
 			"_Save", GTK_RESPONSE_ACCEPT,
 			"_Cancel", GTK_RESPONSE_CANCEL,
-			nullptr);
-	gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(save), true);
+			nullptr));
+	gtk_file_chooser_set_do_overwrite_confirmation((save), true);
+	gtk_file_chooser_set_current_name(save, "untitled.txt");
 	auto res = gtk_dialog_run(GTK_DIALOG(save));
 	if(res == GTK_RESPONSE_ACCEPT)
 	{
@@ -391,7 +393,7 @@ void save()
 		std::ofstream file(filename.c_str());
 		file.write(data.c_str(), data.size());
 	}
-	gtk_widget_destroy(save);
+	gtk_widget_destroy(GTK_WIDGET(save));
 }
 
 void activate()
@@ -458,14 +460,20 @@ void popQueue(std::vector<Node>& nodes)
 	{
 		if(m.type == Message::DATA)
 		{
-			data += m.data;
+			std::string completeData;
+			incompleteData += m.data;
+			auto end = incompleteData.rfind("\n");
+			completeData = incompleteData.substr(0, end);
+			incompleteData = incompleteData.substr(end+1);
+
+			data += completeData;
 			if(displayType == TYPE_DIR)
 			{
-				parseList(m.data, nodes);
+				parseList(completeData, nodes);
 			}
 			else
 			{
-				showText(m.data, nodes);
+				showText(completeData, nodes);
 			}
 		}
 		else if(m.type == Message::ERROR)

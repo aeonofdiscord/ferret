@@ -124,6 +124,14 @@ int docType(int code)
 
 void parseList(const std::string& data, std::vector<Node>& nodes)
 {
+	if(!nodes.size())
+	{
+		Node blank;
+		blank.type = TYPE_INFO;
+		blank.code = 'i';
+		blank.text = "\n";
+		nodes.push_back(blank);
+	}
 	std::vector<std::string> lines;
 	splitLines(data, lines);
 	for(std::string& line : lines)
@@ -174,6 +182,14 @@ std::string filetype(const std::string& path)
 
 void showText(const std::string& data, std::vector<Node>& nodes)
 {
+	if(!nodes.size())
+	{
+		Node blank;
+		blank.type = TYPE_INFO;
+		blank.code = 'i';
+		blank.text = "\n";
+		nodes.push_back(blank);
+	}
 	std::vector<std::string> lines;
 	splitLines(data, lines);
 	for(auto& l : lines)
@@ -358,7 +374,7 @@ void addText(GtkTextBuffer* buffer, const std::string& text)
 
 void addLink(GtkTextBuffer* buffer, const std::string& text, const std::string& url, GdkPixbuf* icon = 0)
 {
-	auto tag = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(view->buffer), "link");
+	auto link = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(view->buffer), "link");
 
 	GtkTextIter end;
 	gtk_text_buffer_get_iter_at_offset(view->buffer, &end, -1);
@@ -375,9 +391,11 @@ void addLink(GtkTextBuffer* buffer, const std::string& text, const std::string& 
 		gtk_text_buffer_get_iter_at_offset(view->buffer, &end, -1);
 		gtk_text_buffer_apply_tag(view->buffer, iconTag, &start, &end);
 	}
-
-	gtk_text_buffer_insert_with_tags(view->buffer, &end, text.c_str(), text.size(), tag, nullptr);
-	links.push_back({startOffset, startOffset+int(text.size()-1), url});
+	gtk_text_buffer_insert(view->buffer, &end, "    ", 4);
+	gtk_text_buffer_get_iter_at_offset(view->buffer, &end, -1);
+	int linkOffset = gtk_text_iter_get_offset(&end);
+	gtk_text_buffer_insert_with_tags(view->buffer, &end, text.c_str(), text.size(), link, nullptr);
+	links.push_back({linkOffset, linkOffset+int(text.size()-1), url});
 }
 
 void showNodes(TextView* view, const std::vector<Node>& nodes)
@@ -470,7 +488,7 @@ void activate()
 	main->push(scroll, true, true);
 
 	view = scroll->add(new TextView());
-	view->setMargin(10, 10, 10, 10);
+	gtk_text_view_set_left_margin(GTK_TEXT_VIEW(view->handle), 20);
 
 	view->setEditable(false);
 	view->showCursor(false);
@@ -478,10 +496,13 @@ void activate()
 
 	GdkRGBA blue = {0, 0, 1, 1} ;
 	gtk_text_buffer_create_tag(view->buffer, "icon",
-		"rise", -4 * PANGO_SCALE,
+		"rise", -7 * PANGO_SCALE,
 		"rise-set", true,
 		nullptr);
-	auto link = gtk_text_buffer_create_tag(view->buffer, "link", "foreground-rgba", &blue, nullptr);
+	auto link = gtk_text_buffer_create_tag(view->buffer, "link",
+		"underline", true,
+		"foreground-rgba", &blue,
+		nullptr);
 
 	g_signal_connect(link, "event", G_CALLBACK(tagEvent), 0);
 

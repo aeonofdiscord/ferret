@@ -14,7 +14,14 @@
 #include "worker.h"
 #include "ui.h"
 
-const std::string RESOURCE_PATH = "/usr/local/share/ferret/";
+#ifndef RESOURCE_PATH
+	#define RESOURCE_PATH ./share/
+#endif
+
+#define _stringify(x) #x
+#define stringify(x) _stringify(x)
+
+const std::string RES_PATH = stringify(RESOURCE_PATH);
 
 enum NodeType
 {
@@ -409,10 +416,10 @@ void save()
 
 GdkPixbuf* loadImage(const std::string& path, float scale = 1.0f)
 {
-	auto p = gdk_pixbuf_new_from_file((RESOURCE_PATH+path).c_str(), 0);
+	auto p = gdk_pixbuf_new_from_file((RES_PATH+path).c_str(), 0);
 	if(!p)
 	{
-		std::cerr << "Failed to load image: " << RESOURCE_PATH+path << "\n";
+		std::cerr << "Failed to load image: " << RES_PATH+path << "\n";
 		return 0;
 	}
 	if(scale == 1.0f)
@@ -429,7 +436,7 @@ void activate()
 	w->setTitle("ferret");
 	w->setDefaultSize(1280, 1024);
 	auto provider = gtk_css_provider_new();
-	gtk_css_provider_load_from_data(provider, read((RESOURCE_PATH + "style.css").c_str()).c_str(), -1, 0);
+	gtk_css_provider_load_from_data(provider, read((RES_PATH + "style.css").c_str()).c_str(), -1, 0);
 	auto screen = gdk_screen_get_default();
 	gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 

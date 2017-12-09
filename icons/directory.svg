@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="64"
+   height="64"
+   viewBox="0 0 64.000002 64.000002"
+   id="svg4190"
+   version="1.1"
+   inkscape:version="0.91 r"
+   sodipodi:docname="directory.svg"
+   inkscape:export-filename="/home/alex/workspace/ferret/share/icons/directory.png"
+   inkscape:export-xdpi="45"
+   inkscape:export-ydpi="45">
+  <defs
+     id="defs4192" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="3.6289694"
+     inkscape:cx="17.68244"
+     inkscape:cy="21.530195"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     units="px"
+     inkscape:window-width="1920"
+     inkscape:window-height="1173"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata4195">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(360.35707,290.93967)">
+    <path
+       style="opacity:1;fill:#f4f5f6;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1"
+       d="m -355.07152,-276.78836 c -0.43517,0 -0.78555,1.00998 -0.78555,2.26453 l 0,5.66146 l 0,35.15817 c 0,1.25455 0.48904,2.26453 1.09651,2.26453 l 52.80698,0 c 0.60746,0 1.09651,-1.00998 1.09651,-2.26453 l 0,-32.89377 c 0,-1.25455 -0.48905,-2.26453 -1.09651,-2.26453 l -27.39399,1.3e-4 l 0,-5.66146 c 0,-1.25455 -0.35037,-2.26453 -0.78555,-2.26453 z"
+       id="rect4136"
+       inkscape:connector-curvature="0"
+       inkscape:export-filename="/home/alex/workspace/ferret/icons/directory.png"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269"
+       sodipodi:nodetypes="ssccssssscsss" />
+  </g>
+</svg>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="64"
+   height="64"
+   viewBox="0 0 64.000001 64.000001"
+   id="svg5385"
+   version="1.1"
+   inkscape:version="0.91 r"
+   sodipodi:docname="audio.svg"
+   inkscape:export-filename="/home/alex/workspace/ferret/share/icons/audio.png"
+   inkscape:export-xdpi="45"
+   inkscape:export-ydpi="45">
+  <defs
+     id="defs5387" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="5.6"
+     inkscape:cx="-4.459081"
+     inkscape:cy="31.534161"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     units="px"
+     inkscape:window-width="1920"
+     inkscape:window-height="1173"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata5390">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-988.36216)">
+    <path
+       sodipodi:nodetypes="ccsscssssssc"
+       inkscape:connector-curvature="0"
+       id="path4203"
+       d="m 14.025012,992.86592 l 30.011157,0 l 0.01631,4.9491 c 0,0.5077 0.232264,2.07714 1.024489,2.07764 l 5.923032,0 l 0,46.69024 c 0,0.7087 -0.456983,1.2793 -1.024489,1.2793 l -35.951124,0 C 13.456932,1047.8622 13,1047.2916 13,1046.5829 l 0,-52.44158 c 0,-0.7087 0.456932,-1.2792 1.024509,-1.2792 z"
+       style="opacity:1;fill:#f4f5f6;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1"
+       inkscape:export-filename="/home/alex/workspace/ferret/icons/binary.png"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269" />
+    <path
+       inkscape:connector-curvature="0"
+       id="path4205"
+       d="m 44.096019,992.87692 l 6.861976,6.91994"
+       style="opacity:1;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1"
+       inkscape:export-filename="/home/alex/workspace/ferret/icons/binary.png"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269" />
+    <path
+       style="opacity:1;fill:#f4f5f6;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1"
+       d="m 45.148241,995.14442 c -0.468096,1.1758 -0.204225,2.6807 -0.202593,3.89994 c 0.924568,-0.31814 4.622028,0.6463 3.806352,-0.51184 c -1.198228,-1.1005 -2.238317,-2.5142 -3.603759,-3.3881 z"
+       id="path4362"
+       inkscape:connector-curvature="0"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269" />
+    <path
+       inkscape:connector-curvature="0"
+       style="opacity:1;fill:#000000;fill-opacity:1;stroke:none;stroke-width:3.03605533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1"
+       d="m 33.672053,1001.8649 l -6.24e-4,0.04 l -1.556771,0 l 0,27.7735 a 4.6756002,6.1452792 69.194493 0 0 -3.353004,-1.0157 a 4.6756002,6.1452792 69.194493 0 0 -6.961911,4.8856 a 4.6756002,6.1452792 69.194493 0 0 4.80071,4.8854 a 4.6756002,6.1452792 69.194493 0 0 6.96191,-4.8854 a 4.6756002,6.1452792 69.194493 0 0 0.09505,-0.8928 l 0.01707,0 l 0,-23.1647 c 5.12328,3.3894 6.625218,4.4588 7.669315,8.0223 c 1.125705,3.8418 -0.765211,7.9611 -2.331198,11.782 c 3.448235,-6.6888 4.156394,-8.0436 3.630237,-12.2792 c -0.723485,-5.8243 -8.38942,-10.6072 -8.970791,-15.1506 z"
+       id="path4261"
+       inkscape:export-filename="/home/alex/workspace/ferret/icons/audio.png"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269" />
+  </g>
+</svg>

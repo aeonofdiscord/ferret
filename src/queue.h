@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -10,8 +11,29 @@ struct Message
 	std::string data;
 };
 
-extern std::vector<Message> dataQueue;
+struct MessageQueue
+{
+	std::vector<Message> queue;
+	std::mutex queueMtx;
 
-void queueData(int reqid, Message::Type t, const std::string& d);
-void queueData(int reqid, Message::Type t, const char* d, size_t sz);
+	Message pop()
+	{
+		std::unique_lock<std::mutex> lock(queueMtx);
+		Message m = queue[0];
+		queue.erase(queue.begin());
+		return m;
+	}
+
+	void push(const Message& m)
+	{
+		std::unique_lock<std::mutex> lock(queueMtx);
+		queue.push_back(m);
+	}
+
+	size_t size() const { return queue.size(); }
+};
+
+extern MessageQueue dataQueue;
+
+void queueData(const Message& m);
 

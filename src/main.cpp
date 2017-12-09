@@ -19,9 +19,11 @@ const std::string RESOURCE_PATH = "/usr/local/share/ferret/";
 enum NodeType
 {
 	TYPE_DIR,
-	TYPE_TEXT,
+	TYPE_INFO,
 	TYPE_FILE,
 	TYPE_BINARY,
+	TYPE_IMAGE,
+	TYPE_AUDIO,
 	TYPE_SEARCH,
 	TYPE_UNKNOWN,
 	TYPE_MAX,
@@ -69,8 +71,7 @@ int historyPos = 0;
 std::string location;
 int displayType = TYPE_DIR;
 
-std::vector<Message> dataQueue;
-std::mutex queueMtx;
+MessageQueue dataQueue;
 
 std::unique_ptr<Application> app;
 std::unique_ptr<Window> w;
@@ -79,6 +80,8 @@ Edit* address = 0;
 int currentRequest = 0;
 std::string data;
 std::string incompleteData;
+
+GdkPixbuf* icons[TYPE_MAX];
 
 const char* userHome()
 {
@@ -90,7 +93,7 @@ int docType(int code)
 	switch(code)
 	{
 	case 'i':
-		return TYPE_TEXT;
+		return TYPE_INFO;
 	case '1':
 		return TYPE_DIR;
 	case '0':
@@ -99,10 +102,12 @@ int docType(int code)
 	case '5':
 	case '6':
 	case '9':
+		return TYPE_BINARY;
 	case 'g':
 	case 'I':
+		return TYPE_IMAGE;
 	case 's':
-		return TYPE_BINARY;
+		return TYPE_AUDIO;
 	case '7':
 		return TYPE_SEARCH;
 	default:
@@ -119,7 +124,7 @@ void parseList(const std::string& data, std::vector<Node>& nodes)
 		if(line.size() > 1)
 		{
 			Node n;
-			n.type = TYPE_TEXT;
+			n.type = TYPE_INFO;
 			char c = line[0];
 			n.code = c;
 			n.type = docType(c);
@@ -134,7 +139,7 @@ void parseList(const std::string& data, std::vector<Node>& nodes)
 				else
 					line.erase(0, i+1);
 			}
-			if((n.type != TYPE_TEXT) && parts.size() >= 4)
+			if((n.type != TYPE_INFO) && parts.size() >= 4)
 			{
 				n.path = parts[1];
 				if(n.path[0] != '/')
@@ -147,8 +152,6 @@ void parseList(const std::string& data, std::vector<Node>& nodes)
 					n.url = "gopher://"+(n.host + "/" + n.code + n.path);
 			}
 			n.text = parts[0] + "\n";
-			if(n.code != 'i')
-				n.text = std::string(&n.code, 1) + " " + n.text;
 			nodes.push_back(n);
 		}
 	}
@@ -169,7 +172,7 @@ void showText(const std::string& data, std::vector<Node>& nodes)
 	for(auto& l : lines)
 	{
 		Node n;
-		n.type = TYPE_TEXT;
+		n.type = TYPE_INFO;
 		n.text = l + "\n";
 		nodes.push_back(n);
 	}
@@ -185,15 +188,9 @@ void showMessage(const std::string& data)
 	showNodes(view, nodes);
 }
 
-void queueData(int reqid, Message::Type t, const char* d, size_t sz)
+void queueData(const Message& m)
 {
-	std::unique_lock<std::mutex> lock(queueMtx);
-	dataQueue.push_back({reqid, t, std::string(d, sz)});
-}
-
-void queueData(int reqid, Message::Type t, const std::string& d)
-{
-	queueData(reqid, t, d.c_str(), d.size());
+	dataQueue.push(m);
 }
 
 void go(const char* url, bool addToHistory = true, bool clearFuture = true)
@@ -240,7 +237,7 @@ void go(const char* url, bool addToHistory = true, bool clearFuture = true)
 		port = port.substr(0, port.rfind("/"));
 	}
 	int type = docType(code);
-	if(type == TYPE_BINARY)
+	if(type == TYPE_BINARY || type == TYPE_IMAGE || type == TYPE_AUDIO)
 	{
 		std::string path = req;
 		path.erase(0, path.find("/")+1);
@@ -352,24 +349,38 @@ void addText(GtkTextBuffer* buffer, const std::string& text)
 	gtk_text_buffer_insert(view->buffer, &end, text.c_str(), text.size());
 }
 
-void addLink(GtkTextBuffer* buffer, GtkTextTag* tag, const std::string& text, const std::string& url)
+void addLink(GtkTextBuffer* buffer, const std::string& text, const std::string& url, GdkPixbuf* icon = 0)
 {
+	auto tag = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(view->buffer), "link");
+
 	GtkTextIter end;
 	gtk_text_buffer_get_iter_at_offset(view->buffer, &end, -1);
-	int start = gtk_text_iter_get_offset(&end);
+	int startOffset = gtk_text_iter_get_offset(&end);
+
+	if(icon)
+	{
+		auto iconTag = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(view->buffer), "icon");
+		gtk_text_buffer_insert_pixbuf(view->buffer, &end, icon);
+
+		GtkTextIter start;
+		gtk_text_buffer_get_iter_at_offset(view->buffer, &start, startOffset);
+
+		gtk_text_buffer_get_iter_at_offset(view->buffer, &end, -1);
+		gtk_text_buffer_apply_tag(view->buffer, iconTag, &start, &end);
+	}
+
 	gtk_text_buffer_insert_with_tags(view->buffer, &end, text.c_str(), text.size(), tag, nullptr);
-	links.push_back({start, start+int(text.size()-1), url});
+	links.push_back({startOffset, startOffset+int(text.size()-1), url});
 }
 
 void showNodes(TextView* view, const std::vector<Node>& nodes)
 {
-	auto tag = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(view->buffer), "link");
 	for(auto& n : nodes)
 	{
-		if(n.type == TYPE_TEXT)
+		if(n.type == TYPE_INFO)
 			addText(view->buffer, n.text);
 		else
-			addLink(view->buffer, tag, n.text, n.url);
+			addLink(view->buffer, n.text, n.url, icons[n.type]);
 	}
 }
 
@@ -396,18 +407,36 @@ void save()
 	gtk_widget_destroy(GTK_WIDGET(save));
 }
 
+GdkPixbuf* loadImage(const std::string& path, float scale = 1.0f)
+{
+	auto p = gdk_pixbuf_new_from_file((RESOURCE_PATH+path).c_str(), 0);
+	if(!p)
+	{
+		std::cerr << "Failed to load image: " << RESOURCE_PATH+path << "\n";
+		return 0;
+	}
+	if(scale == 1.0f)
+		return p;
+	auto scaled = gdk_pixbuf_scale_simple(p, gdk_pixbuf_get_width(p) * scale, gdk_pixbuf_get_height(p) * scale, GDK_INTERP_NEAREST);
+	g_object_unref(p);
+	return scaled;
+}
+
 void activate()
 {
 	w.reset(new Window(app.get()));
 
 	w->setTitle("ferret");
 	w->setDefaultSize(1280, 1024);
-	Box* main = w->add(new Box(Box::VERTICAL));
-
 	auto provider = gtk_css_provider_new();
 	gtk_css_provider_load_from_data(provider, read((RESOURCE_PATH + "style.css").c_str()).c_str(), -1, 0);
 	auto screen = gdk_screen_get_default();
 	gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+
+	Box* main = w->add(new Box(Box::VERTICAL));
+	auto context = gtk_widget_get_style_context(main->handle);
+	gtk_style_context_add_class(context, "main");
 
 	auto menubar = main->insert(new MenuBar());
 	auto fileMenu = new Menu();
@@ -441,8 +470,23 @@ void activate()
 	w->showAll();
 
 	GdkRGBA blue = {0, 0, 1, 1} ;
-	auto tag = gtk_text_buffer_create_tag(view->buffer, "link", "foreground-rgba", &blue, nullptr);
-	g_signal_connect(tag, "event", G_CALLBACK(tagEvent), 0);
+	gtk_text_buffer_create_tag(view->buffer, "icon",
+		"rise", -4 * PANGO_SCALE,
+		"rise-set", true,
+		nullptr);
+	auto link = gtk_text_buffer_create_tag(view->buffer, "link", "foreground-rgba", &blue, nullptr);
+
+	g_signal_connect(link, "event", G_CALLBACK(tagEvent), 0);
+
+	icons[TYPE_DIR] = loadImage("icons/directory.png");
+	icons[TYPE_FILE] = loadImage("icons/text.png");
+	icons[TYPE_BINARY] = loadImage("icons/binary.png");
+	icons[TYPE_IMAGE] = loadImage("icons/image.png");
+	icons[TYPE_AUDIO] = loadImage("icons/audio.png");
+	icons[TYPE_SEARCH] = loadImage("icons/search.png");
+	icons[TYPE_UNKNOWN] = loadImage("icons/unknown.png");
+
+	icons[TYPE_MAX] = 0;
 
 	if(std::string(HOME) != "")
 	{
@@ -452,10 +496,9 @@ void activate()
 
 void popQueue(std::vector<Node>& nodes)
 {
-	std::unique_lock<std::mutex> lock(queueMtx);
 	if(!dataQueue.size())
 		return;
-	auto& m = dataQueue[0];
+	auto m = dataQueue.pop();
 	if(m.reqid == currentRequest)
 	{
 		if(m.type == Message::DATA)
@@ -483,7 +526,6 @@ void popQueue(std::vector<Node>& nodes)
 	}
 	else
 		std::cout << "discarded " << m.data.size() << " bytes from req " << m.reqid << "\n";
-	dataQueue.erase(dataQueue.begin());
 }
 
 int idle(void*)
@@ -499,6 +541,14 @@ int idle(void*)
 	return 1;
 }
 
+void cleanup()
+{
+	for(auto p : icons)
+	{
+		if(p) g_object_unref(p);
+	}
+}
+
 int main(int argc, char** argv)
 {
 	app.reset(new Application("test.app", 0));
@@ -509,6 +559,7 @@ int main(int argc, char** argv)
 	int status = app->run(argc, argv);
 	endWorker();
 	worker.join();
+	cleanup();
 	return status;
 }
 

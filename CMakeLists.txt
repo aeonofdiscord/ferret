@@ -11,7 +11,7 @@ target_link_libraries(ferret pthread ${GTK3_LIBRARIES})
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -g --std=c++11")
 
 install(TARGETS ferret DESTINATION bin)
-install(FILES style.css DESTINATION share/ferret)
+install(DIRECTORY share/ DESTINATION share/ferret)
 install(CODE "execute_process(COMMAND xdg-desktop-menu install --novendor ../ferret.desktop)")
 install(CODE "execute_process(COMMAND xdg-icon-resource install --novendor --size 256 ../icons/256/ferret.png)")
 

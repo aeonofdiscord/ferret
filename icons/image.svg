@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="64"
+   height="64"
+   viewBox="0 0 64.000001 64.000001"
+   id="svg5385"
+   version="1.1"
+   inkscape:version="0.91 r"
+   sodipodi:docname="image.svg"
+   inkscape:export-filename="/home/alex/workspace/ferret/share/icons/image.png"
+   inkscape:export-xdpi="45"
+   inkscape:export-ydpi="45">
+  <defs
+     id="defs5387" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="3.959798"
+     inkscape:cx="-13.752907"
+     inkscape:cy="39.744062"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     units="px"
+     inkscape:window-width="1920"
+     inkscape:window-height="1173"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata5390">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-988.36216)">
+    <path
+       sodipodi:nodetypes="ccsscssssssc"
+       inkscape:connector-curvature="0"
+       id="path4203"
+       d="m 14.025012,992.86592 l 30.011157,0 l 0.01631,4.9491 c 0,0.5077 0.232264,2.07714 1.024489,2.07764 l 5.923032,0 l 0,46.69024 c 0,0.7087 -0.456983,1.2793 -1.024489,1.2793 l -35.951124,0 C 13.456932,1047.8622 13,1047.2916 13,1046.5829 l 0,-52.44158 c 0,-0.7087 0.456932,-1.2792 1.024509,-1.2792 z"
+       style="opacity:1;fill:#f4f5f6;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1"
+       inkscape:export-filename="/home/alex/workspace/ferret/icons/binary.png"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269" />
+    <path
+       inkscape:connector-curvature="0"
+       id="path4205"
+       d="m 44.096019,992.87692 l 6.861976,6.91994"
+       style="opacity:1;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1"
+       inkscape:export-filename="/home/alex/workspace/ferret/icons/binary.png"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269" />
+    <path
+       style="opacity:1;fill:#f4f5f6;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1"
+       d="m 45.148241,995.14442 c -0.468096,1.1758 -0.204225,2.6807 -0.202593,3.89994 c 0.924568,-0.31814 4.622028,0.6463 3.806352,-0.51184 c -1.198228,-1.1005 -2.238317,-2.5142 -3.603759,-3.3881 z"
+       id="path4362"
+       inkscape:connector-curvature="0"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269" />
+    <rect
+       style="opacity:1;fill:none;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1"
+       id="rect4312"
+       width="26.051527"
+       height="16.344509"
+       x="18.948473"
+       y="1012.2567"
+       inkscape:export-filename="/home/alex/workspace/ferret/icons/image.png"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269" />
+    <path
+       style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;direction:ltr;block-progression:tb;writing-mode:lr-tb;baseline-shift:baseline;text-anchor:start;white-space:normal;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:11.19999981;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
+       d="m 18.463778,1021.8759 l 0.870944,1.0066 c 0.09194,-0.071 0.184212,-0.1373 0.276337,-0.2032 c -1.29e-4,1.7383 -0.173767,3.9688 -0.173786,5.7073 c 1.414568,0.1214 2.927919,0.017 4.380526,0.052 l 20.633931,-0.3613 c 0.118192,-1.1873 0.212444,-2.3333 0.212496,-3.5567 l -6.544837,-4.1144 l -6.070902,3.1598 l -7.52919,-7.4664 z"
+       id="path4327"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="ccccccccccc"
+       inkscape:export-filename="/home/alex/workspace/ferret/icons/image.png"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269" />
+    <ellipse
+       id="path4333"
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none"
+       cx="40.506649"
+       cy="1015.5067"
+       inkscape:export-filename="/home/alex/workspace/ferret/icons/image.png"
+       inkscape:export-xdpi="29.378269"
+       inkscape:export-ydpi="29.378269"
+       rx="1.5431055"
+       ry="1.457698" />
+  </g>
+</svg>

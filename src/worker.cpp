@@ -131,7 +131,7 @@ void Downloader::update(fd_set* rd, fd_set* wr)
 			if(type == SAVE)
 				file->write(downloadBuffer, r);
 			else
-				queueData(reqid, Message::DATA, downloadBuffer, r);
+				queueData({reqid, Message::DATA, std::string(downloadBuffer, r)});
 		}
 	}
 }
@@ -183,7 +183,7 @@ void pollDownloaders()
 			}
 			else if(d->type == Downloader::QUEUE_DATA)
 			{
-				queueData(d->reqid, Message::ERROR, d->error);
+				queueData({d->reqid, Message::ERROR, d->error});
 			}
 			i = downloaders.erase(i);
 			continue;

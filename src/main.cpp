@@ -62,6 +62,7 @@ struct History
 
 struct Link
 {
+	enum Type { LINK, SEARCH } type;
 	int start, end;
 	std::string url;
 };
@@ -80,8 +81,12 @@ int displayType = TYPE_DIR;
 
 MessageQueue dataQueue;
 
+class SearchDialog;
+
 std::unique_ptr<Application> app;
 std::unique_ptr<Window> w;
+std::unique_ptr<SearchDialog> searchDialog;
+
 TextView* view = 0;
 Edit* address = 0;
 int currentRequest = 0;
@@ -347,6 +352,63 @@ std::string read(const char* path)
 	return str;
 }
 
+struct SearchDialog : public Widget
+{
+	std::string url;
+	Edit* text;
+
+	static void _response(GtkDialog* dialog, int response, gpointer data)
+	{
+		auto d = static_cast<SearchDialog*>(data);
+		if(response == GTK_RESPONSE_OK)
+		{
+			d->search();
+		}
+		d->destroy();
+	}
+
+	static void _destroy(GtkDialog* dialog, int response, gpointer data)
+	{
+		searchDialog.reset(0);
+	}
+
+	SearchDialog(const std::string& url) : url(url), text(0)
+	{
+		handle = GTK_WIDGET(gtk_dialog_new_with_buttons ("Search", GTK_WINDOW(w->handle), GTK_DIALOG_MODAL,
+			GTK_STOCK_OK, GTK_RESPONSE_OK,
+			GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+			nullptr));
+		auto content_area = gtk_dialog_get_content_area(GTK_DIALOG(handle));
+		gtk_container_add(GTK_CONTAINER(content_area), gtk_label_new("Search query: "));
+		text = new Edit();
+		text->onActivate([this](){
+			search();
+			destroy();
+		});
+		gtk_container_add(GTK_CONTAINER(content_area), text->handle);
+		widgets.push_back(text);
+		g_signal_connect(GTK_DIALOG(handle), "response", G_CALLBACK(_response), this);
+		g_signal_connect(GTK_DIALOG(handle), "destroy", G_CALLBACK(_destroy), this);
+		gtk_widget_show_all(handle);
+	}
+
+	~SearchDialog()
+	{
+
+	}
+
+	void destroy()
+	{
+		gtk_widget_destroy(handle);
+		handle = 0;
+	}
+
+	void search()
+	{
+		go((url + "\t" + text->text()).c_str());
+	}
+};
+
 void tagEvent(GtkTextTag* tag, GObject* o, GdkEvent* event, GtkTextIter* iter, gpointer data)
 {
 	if(event->type == GDK_BUTTON_PRESS)
@@ -358,7 +420,12 @@ void tagEvent(GtkTextTag* tag, GObject* o, GdkEvent* event, GtkTextIter* iter, g
 				continue;
 			if(offset >= l.start && offset < l.end)
 			{
-				go(l.url.c_str());
+				if(l.type == Link::SEARCH)
+				{
+					searchDialog.reset(new SearchDialog(l.url));
+				}
+				else
+					go(l.url.c_str());
 				break;
 			}
 		}
@@ -372,7 +439,7 @@ void addText(GtkTextBuffer* buffer, const std::string& text)
 	gtk_text_buffer_insert(view->buffer, &end, text.c_str(), text.size());
 }
 
-void addLink(GtkTextBuffer* buffer, const std::string& text, const std::string& url, GdkPixbuf* icon = 0)
+void addLink(GtkTextBuffer* buffer, const std::string& text, const std::string& url, GdkPixbuf* icon = 0, Link::Type type = Link::LINK)
 {
 	auto link = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(view->buffer), "link");
 
@@ -395,7 +462,7 @@ void addLink(GtkTextBuffer* buffer, const std::string& text, const std::string& 
 	gtk_text_buffer_get_iter_at_offset(view->buffer, &end, -1);
 	int linkOffset = gtk_text_iter_get_offset(&end);
 	gtk_text_buffer_insert_with_tags(view->buffer, &end, text.c_str(), text.size(), link, nullptr);
-	links.push_back({linkOffset, linkOffset+int(text.size()-1), url});
+	links.push_back({type, linkOffset, linkOffset+int(text.size()-1), url});
 }
 
 void showNodes(TextView* view, const std::vector<Node>& nodes)
@@ -405,7 +472,7 @@ void showNodes(TextView* view, const std::vector<Node>& nodes)
 		if(n.type == TYPE_INFO)
 			addText(view->buffer, n.text);
 		else
-			addLink(view->buffer, n.text, n.url, icons[n.type]);
+			addLink(view->buffer, n.text, n.url, icons[n.type], n.type == TYPE_SEARCH? Link::SEARCH : Link::LINK);
 	}
 }
 
@@ -538,7 +605,7 @@ void popQueue(std::vector<Node>& nodes)
 			incompleteData = incompleteData.substr(end+1);
 
 			data += completeData;
-			if(displayType == TYPE_DIR)
+			if(displayType == TYPE_DIR || displayType == TYPE_SEARCH)
 			{
 				parseList(completeData, nodes);
 			}

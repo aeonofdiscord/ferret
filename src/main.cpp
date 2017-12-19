@@ -425,7 +425,10 @@ void tagEvent(GtkTextTag* tag, GObject* o, GdkEvent* event, GtkTextIter* iter, g
 					searchDialog.reset(new SearchDialog(l.url));
 				}
 				else
-					go(l.url.c_str());
+				{
+					std::string url = l.url;
+					go(url.c_str());
+				}
 				break;
 			}
 		}
